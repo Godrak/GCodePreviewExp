@@ -11,104 +11,88 @@
 
 #include <epoxy/gl_generated.h>
 #include "glm/glm.hpp"
+#include <glm/fwd.hpp>
 #include <vector>
 #include <random>
 
 namespace billboard {
-GLuint billboardVAO, vertexBuffer, elementBuffer;
+GLuint billboardVAO, vertexBuffer;
 
-GLuint pathSSBO;
-
-GLuint pathSSBObindPoint = 0;
+GLuint pathSSBObindPoint = 5;
 
 GLint vid_loc = 0;
 
-struct vertex {
-	glm::int8 vertex_id;
+std::vector<glm::int8> vertexData;
 
-	vertex(glm::int8 id) :
-			vertex_id(id) {
-	}
-};
-
-std::vector<vertex> vertexData;
-std::vector<uint> indicesData;
-
-void prepareData() {
-        vertexData = std::vector<vertex>{{0}, {1}, {2}, {3}};
-
-        indicesData = std::vector<uint> {
-			0, 1, 2,
-			2, 3, 0
-	};
+void prepareData()
+{
+    vertexData = std::vector<glm::int8>{0, 1, 2, 2, 3, 0};
 }
 
-
-struct PathPoint {
-	glm::vec3 pos;
-	glm::vec3 color;
-	float height;
-	float width;
+struct PathPoint
+{
+    glm::vec3 pos;
+    glm::vec3 color;
+    float     height;
+    float     width;
 };
 
-std::vector<PathPoint> generateTestingPathPoints()
+struct BufferedPath
 {
-    std::vector<PathPoint> pathPoints;
-    std::mt19937 rng(std::random_device{}()); // Random number generator
-    std::uniform_real_distribution<float> colorDist(0.0f, 1.0f); // Random color distribution
-    std::uniform_real_distribution<float> sizeDist(1.0f, 5.0f); // Random size distribution
+    GLuint pathSSBO;
+    size_t point_count;
+};
 
+BufferedPath generateTestingPathPoints()
+{
+    std::vector<PathPoint>                pathPoints;
+    std::mt19937                          rng(std::random_device{}()); // Random number generator
+    std::uniform_real_distribution<float> colorDist(0.0f, 1.0f);       // Random color distribution
+    std::uniform_real_distribution<float> sizeDist(1.0f, 5.0f);        // Random size distribution
+    std::uniform_real_distribution<float> diffDistance(1.0f, 50.0f);   // Random size distribution
+
+    glm::vec3 last_point = glm::vec3(diffDistance(rng), diffDistance(rng), diffDistance(rng)); 
     for (int i = 0; i < 10; ++i) {
         PathPoint point;
-        point.pos = glm::vec3(i, i, i);
-        point.color = glm::vec3(colorDist(rng), colorDist(rng), colorDist(rng)); // Random color
-        point.height = sizeDist(rng); // Random height between 1.0 and 5.0
-        point.width = sizeDist(rng); // Random width between 1.0 and 5.0
+        point.pos    = last_point + glm::vec3(diffDistance(rng), diffDistance(rng), diffDistance(rng));
+        point.color  = glm::vec3(colorDist(rng), colorDist(rng), colorDist(rng)); // Random color
+        point.height = sizeDist(rng);                                             // Random height between 1.0 and 5.0
+        point.width  = sizeDist(rng);                                             // Random width between 1.0 and 5.0
+        last_point = point.pos;
         pathPoints.push_back(point);
     }
 
-    return pathPoints;
+    BufferedPath result;
+    result.point_count = pathPoints.size();
+    glGenBuffers(1, &result.pathSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, result.pathSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, pathPoints.size() * sizeof(PathPoint), pathPoints.data(), GL_STATIC_DRAW);
+    // Unbind the SSBO
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    return result;
 }
 
-void createPathSSBO() {
-	glGenBuffers(1, &pathSSBO);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, pathSSBO);
+void init()
+{
+    glGenVertexArrays(1, &billboardVAO);
+    glBindVertexArray(billboardVAO);
 
-	auto pathPoints = generateTestingPathPoints();
+    glGenBuffers(1, &vertexBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
 
-	glBufferData(GL_SHADER_STORAGE_BUFFER, pathPoints.size() * sizeof(PathPoint), pathPoints.data(), GL_STATIC_DRAW);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, pathSSBObindPoint, pathSSBO);
+    checkGl();
 
-	// Unbind the SSBO
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    glBufferData(GL_ARRAY_BUFFER, vertexData.size() * sizeof(glm::int8), vertexData.data(), GL_STATIC_DRAW);
+
+    // vertex attributes - id:
+    glEnableVertexAttribArray(vid_loc);
+    glVertexAttribPointer(vid_loc, 1, GL_BYTE, GL_FALSE, sizeof(glm::int8), (void *)0);
+    checkGl();
+
+    glBindVertexArray(0);
 }
 
-void init() {
-	glGenVertexArrays(1, &billboardVAO);
-	glBindVertexArray(billboardVAO);
-
-	glGenBuffers(1, &vertexBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-
-	glGenBuffers(1, &elementBuffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementBuffer);
-
-	checkGl();
-
-	glBufferData(GL_ARRAY_BUFFER, vertexData.size() * sizeof(vertex),
-			vertexData.data(), GL_STATIC_DRAW);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indicesData.size() * sizeof(uint),
-			indicesData.data(), GL_STATIC_DRAW);
-
-// vertex attributes - id:
-	glEnableVertexAttribArray(vid_loc);
-	glVertexAttribPointer(vid_loc, 1, GL_BYTE, GL_FALSE, sizeof(vertex),
-			(void *) 0);
-	checkGl();
-
-	glBindVertexArray(0);
-}
-
-}
+} // namespace billboard
 
 #endif /* BILLBOARD_H_ */

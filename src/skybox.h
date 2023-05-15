@@ -32,7 +32,7 @@ std::vector<vertex> vertexData;
 std::vector<uint> indicesData;
 
 void prepareData() {
-	float size = 1000;
+	float size = 500;
 	vertexData = std::vector<vertex> {
 			// front
 			{ { -size, -size, size } },

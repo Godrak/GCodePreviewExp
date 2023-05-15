@@ -1,5 +1,7 @@
+
 #include "epoxy/gl.h"
 #include <GLFW/glfw3.h>
+#include <epoxy/gl_generated.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -15,6 +17,7 @@
 #include "camera.h"
 #include "shaders.h"
 #include "skybox.h"
+#include "billboard.h"
 
 namespace fps {
 static double fpsOrigin = 0.0;
@@ -183,7 +186,7 @@ void switchConfiguration() {
 	}
 }
 
-void render() {
+void render(const billboard::BufferedPath& path) {
 	currentTime = float(glfwGetTime());checkGl();
 	auto delta = currentTime - lastTime;
 	lastTime = currentTime;
@@ -209,7 +212,26 @@ void render() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);checkGl();
 	glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);checkGl();
 
-	//SKYBOX DRAW
+
+    // BILLBOARDED EXTRUSION PATHS
+	glDisable(GL_CULL_FACE);
+
+    glUseProgram(shaderProgram::billboard_program);
+    glBindVertexArray(billboard::billboardVAO);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, billboard::pathSSBObindPoint, path.pathSSBO);
+    checkGl();
+
+    glUniformMatrix4fv(globals::mvp_location, 1, GL_FALSE, glm::value_ptr(model_view_projection));
+    glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
+    checkGl();
+
+    glDrawArraysInstanced(GL_TRIANGLES, 0, billboard::vertexData.size(), 1);
+    checkGl();
+
+    glUseProgram(0);
+    glBindVertexArray(0);
+
+    //SKYBOX DRAW
 	glUseProgram(shaderProgram::skybox_program);checkGl();
 	glBindVertexArray(skybox::skyboxVAO);checkGl();
 
@@ -237,7 +259,9 @@ void render() {
 
 void setup() {
 	shaderProgram::createSkyboxProgram();
+	shaderProgram::createBillboardProgram();
 	skybox::init();
+	billboard::init();
 	glClearColor(0.0,0.0,0.6,0.0);
 	checkGl();
 }
@@ -250,9 +274,12 @@ int main() {
 	rendering::currentTime = float(glfwGetTime());
 
 	rendering::setup();
+
+	billboard::BufferedPath path = billboard::generateTestingPathPoints();
+
 	fps::fps_start();
 	while (!glfwWindowShouldClose(glfwContext::window)) {
-		rendering::render();
+		rendering::render(path);
 	}
 
 	glfwDestroyWindow(glfwContext::window);

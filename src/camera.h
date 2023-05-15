@@ -9,10 +9,10 @@
 static const glm::vec3 UP = { 0, 1, 0 };
 
 namespace camera {
-glm::vec3 position = { config::terrainSizeU.x/2, 15*config::unitsPerMeter, config::terrainSizeU.y/2 };
-glm::vec3 direction = { 0, -1, 0.01};
+glm::vec3 position = { 0, 10, 0 };
+glm::vec3 direction = { 0, -0.9, 0.1};
 glm::vec3 up = { 0, 1, 0 };
-float stepSize = config::unitsPerMeter/3;
+float stepSize = 3;
 float rotationSpeed = 2;
 
 void applyViewTransform(glm::mat4x4 &m) {
@@ -21,7 +21,7 @@ void applyViewTransform(glm::mat4x4 &m) {
 
 void applyProjectionTransform(glm::mat4x4 &m) {
 	glm::mat4x4 perspective = glm::perspective<float>(glm::radians(60.0f),
-			(float) globals::screenResolution.x / (float) globals::screenResolution.y, 100.0f, 30000.0f);
+			(float) globals::screenResolution.x / (float) globals::screenResolution.y, 1.0f, 1000.0f);
 	m = perspective * m;
 }
 

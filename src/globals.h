@@ -13,12 +13,6 @@ GLint screen_size_location = 2;
 }
 
 namespace config {
-const int unitsPerMeter = 100;
-const float verticesPerMeter = unitsPerMeter * 0.003; //0.3
-const glm::vec2 terrainSizeM = { 300, 300 };
-const glm::vec2 terrainSizeU = { terrainSizeM.x * unitsPerMeter, terrainSizeM.y
-		* unitsPerMeter };
-
 bool updateCameraPosition = true;
 bool geometryMode = false;
 }
