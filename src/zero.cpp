@@ -216,39 +216,41 @@ void render(const billboard::BufferedPath& path) {
     // BILLBOARDED EXTRUSION PATHS
 	glDisable(GL_CULL_FACE);
 
-    glUseProgram(shaderProgram::billboard_program);
     glBindVertexArray(billboard::billboardVAO);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, billboard::pathSSBObindPoint, path.pathSSBO);
+    glUseProgram(shaderProgram::billboard_program);
     checkGl();
 
+    // Bind the texture to the texture unit 0
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_RECTANGLE, path.pathTexture);
+	
     glUniformMatrix4fv(globals::mvp_location, 1, GL_FALSE, glm::value_ptr(model_view_projection));
     glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
     checkGl();
-
-    glDrawArraysInstanced(GL_TRIANGLES, 0, billboard::vertexData.size(), 1);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, billboard::vertexData.size(), path.point_count-1);
     checkGl();
 
     glUseProgram(0);
     glBindVertexArray(0);
 
     //SKYBOX DRAW
-	glUseProgram(shaderProgram::skybox_program);checkGl();
-	glBindVertexArray(skybox::skyboxVAO);checkGl();
+	// glUseProgram(shaderProgram::skybox_program);checkGl();
+	// glBindVertexArray(skybox::skyboxVAO);checkGl();
 
-	glDisable(GL_DEPTH_TEST);checkGl();
-	glDepthMask(false);checkGl();
+	// glDisable(GL_DEPTH_TEST);checkGl();
+	// glDepthMask(false);checkGl();
 
-	glUniformMatrix4fv(globals::mvp_location, 1, GL_FALSE, glm::value_ptr(model_view_projection));checkGl();
-	glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));checkGl();
-	glUniform2iv(globals::screen_size_location, 1, glm::value_ptr(globals::screenResolution));checkGl();
+	// glUniformMatrix4fv(globals::mvp_location, 1, GL_FALSE, glm::value_ptr(model_view_projection));checkGl();
+	// glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));checkGl();
+	// glUniform2iv(globals::screen_size_location, 1, glm::value_ptr(globals::screenResolution));checkGl();
 
-	glDrawElements(GL_TRIANGLES, skybox::indicesData.size(), GL_UNSIGNED_INT, 0);checkGl();
+	// glDrawElements(GL_TRIANGLES, skybox::indicesData.size(), GL_UNSIGNED_INT, 0);checkGl();
 
-	glEnable(GL_DEPTH_TEST);checkGl();
-	glDepthMask(true);checkGl();
+	// glEnable(GL_DEPTH_TEST);checkGl();
+	// glDepthMask(true);checkGl();
 
-	glUseProgram(0);checkGl();
-	glBindVertexArray(0);checkGl();
+	// glUseProgram(0);checkGl();
+	// glBindVertexArray(0);checkGl();
 
 //SWAP BUFFERS
 	glfwSwapBuffers(glfwContext::window);checkGl();

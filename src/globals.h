@@ -10,6 +10,7 @@ glm::ivec2 screenResolution = {1600,830};
 GLint mvp_location = 0;
 GLint camera_position_location = 1;
 GLint screen_size_location = 2;
+GLint path_texture_location = 3;
 }
 
 namespace config {

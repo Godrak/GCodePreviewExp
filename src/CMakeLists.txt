@@ -7,7 +7,7 @@ find_package(glm REQUIRED)
 
 add_executable(Zero zero.cpp misc/sky.c)
 target_link_libraries(Zero PUBLIC glfw epoxy)
-target_compile_options(Zero PRIVATE -Wno-trigraphs)
+target_compile_options(Zero PRIVATE -Wno-trigraphs -g)
 
 add_custom_target(Shaders ALL)
 add_custom_command(TARGET Shaders PRE_BUILD COMMAND 

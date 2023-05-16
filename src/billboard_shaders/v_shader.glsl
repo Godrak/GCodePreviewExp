@@ -1,74 +1,70 @@
 #version 450
 
-struct PathPoint {
-    vec3 pos;
-    vec3 color;
-    float height;
-    float width;
-};
-
 layout(location = 0) uniform mat4 mvp;
 layout(location = 1) uniform vec3 cameraPosition;
 
 layout(location = 0) in int vertex_id;
 
-// Buffer binding point for the SSBO
-layout(std430, binding = 0) buffer PathPoints {
-    PathPoint pathPoints[];
-};
+// Texture binding point for the path data
+layout(binding = 0) uniform sampler2DRect pathTexture;
 
 out vec3 color;
 
+vec3 loadVec3fromTex(int pos, int offset) {
+    vec3 result;
+    result.x = texelFetch(pathTexture, ivec2(pos, offset+0)).x;
+    result.y = texelFetch(pathTexture, ivec2(pos, offset+1)).x;
+    result.z = texelFetch(pathTexture, ivec2(pos, offset+2)).x;
 
-// void main() {
-//     // Retrieve the instance ID
-//     uint instanceID = gl_InstanceID;
+    return result;
+} 
 
-//     PathPoint a = pathPoints[instanceID];
-//     PathPoint b = pathPoints[instanceID+1];
+void main2() {
+    // Retrieve the instance ID
+    int id_a = int(gl_InstanceID);
+    int id_b = int(gl_InstanceID) + 1;
 
-// 	vec3 lineDir = b.pos - a.pos;
-//     vec3 lineDirNormalized = normalize(lineDir);
-//     vec3 upVector = normalize(cross(lineDirNormalized, cameraPosition - a.pos));
-//     vec3 rightVector = normalize(cross(lineDirNormalized, upVector));
+    vec3 pos_a = loadVec3fromTex(id_a, 0);
+    vec3 color_a = loadVec3fromTex(id_a, 3);
+    float height_a = texelFetch(pathTexture, ivec2(id_a, 6)).x;
+    float width_a = texelFetch(pathTexture, ivec2(id_a, 7)).x;
 
-//     upVector = vec3(0.0,1.0,0.0);
-//     rightVector = normalize(cross(lineDirNormalized, upVector));
+    vec3 pos_b = loadVec3fromTex(id_b, 0);
+    vec3 color_b = loadVec3fromTex(id_b, 3);
+    float height_b = texelFetch(pathTexture, ivec2(id_b, 6)).x;
+    float width_b = texelFetch(pathTexture, ivec2(id_b, 7)).x;
 
-//     float halfWidthA = a.width * 0.5;
-//     float halfHeightA = a.height * 0.5;
+	vec3 lineDir = pos_a - pos_b;
+    vec3 lineDirNormalized = normalize(lineDir);
+    vec3 upVector = normalize(cross(lineDirNormalized, cameraPosition - pos_a));
+    vec3 rightVector = normalize(cross(lineDirNormalized, upVector));
 
-// 	float halfWidthB = b.width * 0.5;
-//     float halfHeightB = b.height * 0.5;
+    // Calculate the four corner points of the box
+    vec3 topLeft = pos_a + upVector * height_a * 0.5 - rightVector * width_a * 0.5;
+    vec3 topRight = pos_a + upVector *  height_a * 0.5 + rightVector * width_a * 0.5;
+    vec3 bottomLeft = pos_b - upVector *  height_b * 0.5 - rightVector * width_b * 0.5;
+    vec3 bottomRight = pos_b - upVector *  height_b * 0.5 + rightVector * width_b * 0.5;
 
-//     // Calculate the four corner points of the box
-//     vec3 topLeft = a.pos + upVector * halfHeightA - rightVector * halfWidthA;
-//     vec3 topRight = a.pos + upVector * halfHeightA + rightVector * halfWidthA;
-//     vec3 bottomLeft = b.pos - upVector * halfHeightB - rightVector * halfWidthB;
-//     vec3 bottomRight = b.pos - upVector * halfHeightB + rightVector * halfWidthB;
+    vec3 vertexPosition = vec3(0,0,0);
+    if (vertex_id == 0){
+        vertexPosition = topLeft;
+        color = color_a;
+    }
+    else if (vertex_id == 1) {
+        vertexPosition = topRight;
+        color = color_a;
+    }
+    else if (vertex_id == 2) {
+        vertexPosition = bottomRight;
+        color = color_b;
+    }
+    else if (vertex_id == 3) {
+        vertexPosition = bottomLeft;
+        color = color_b;
+    }
 
-//     vec3 vertexPosition = vec3(0,0,0);
-//     if (vertex_id == 0){
-//         vertexPosition = topLeft;
-//         color = a.color;
-//     }
-//     else if (vertex_id == 1) {
-//         vertexPosition = topRight;
-//         color = a.color;
-//     }
-//     else if (vertex_id == 2) {
-//         vertexPosition = bottomRight;
-//         color = b.color;
-//     }
-//     else if (vertex_id == 3) {
-//         vertexPosition = bottomLeft;
-//         color = b.color;
-//     }
-
-//     color = vec3(1,0,0);
-
-//     gl_Position = mvp * vec4(vertexPosition, 1.0);
-// }
+    gl_Position = mvp * vec4(vertexPosition, 1.0);
+}
 
 
 void main() {

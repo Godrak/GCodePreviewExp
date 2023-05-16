@@ -14,6 +14,8 @@
 #include <glm/fwd.hpp>
 #include <vector>
 #include <random>
+#include <iostream>
+#include "globals.h"
 
 namespace billboard {
 GLuint billboardVAO, vertexBuffer;
@@ -22,24 +24,24 @@ GLuint pathSSBObindPoint = 5;
 
 GLint vid_loc = 0;
 
-std::vector<glm::int8> vertexData;
+std::vector<int> vertexData;
 
 void prepareData()
 {
-    vertexData = std::vector<glm::int8>{0, 1, 2, 2, 3, 0};
+    vertexData = std::vector<int>{0, 1, 2, 2, 3, 0};
 }
 
 struct PathPoint
 {
     glm::vec3 pos;
     glm::vec3 color;
-    float     height;
-    float     width;
+    float height;
+    float width;
 };
 
 struct BufferedPath
 {
-    GLuint pathSSBO;
+    GLuint pathTexture;
     size_t point_count;
 };
 
@@ -63,12 +65,27 @@ BufferedPath generateTestingPathPoints()
     }
 
     BufferedPath result;
-    result.point_count = pathPoints.size();
-    glGenBuffers(1, &result.pathSSBO);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, result.pathSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, pathPoints.size() * sizeof(PathPoint), pathPoints.data(), GL_STATIC_DRAW);
-    // Unbind the SSBO
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    result.point_count = pathPoints.size(); 
+
+    glBindVertexArray(billboardVAO);
+
+    // Create and bind the texture
+    glGenTextures(1, &result.pathTexture); checkGl();
+    glBindTexture(GL_TEXTURE_RECTANGLE, result.pathTexture); checkGl();
+
+    // Set texture parameters
+    glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MIN_FILTER, GL_NEAREST); checkGl();
+    glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MAG_FILTER, GL_NEAREST); checkGl();
+
+    // Allocate memory for the texture
+    glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_R32F, pathPoints.size(), 8, 0, GL_RED, GL_FLOAT, pathPoints.data()); checkGl();
+
+    // Bind the texture to an image unit
+    glBindImageTexture(0, result.pathTexture, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32F); checkGl();
+
+    // Unbind the texture
+    glBindTexture(GL_TEXTURE_RECTANGLE, 0); checkGl();
+    glBindVertexArray(0);
 
     return result;
 }
@@ -82,12 +99,13 @@ void init()
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
 
     checkGl();
+    prepareData();
 
-    glBufferData(GL_ARRAY_BUFFER, vertexData.size() * sizeof(glm::int8), vertexData.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vertexData.size() * sizeof(int), vertexData.data(), GL_STATIC_DRAW);
 
     // vertex attributes - id:
     glEnableVertexAttribArray(vid_loc);
-    glVertexAttribPointer(vid_loc, 1, GL_BYTE, GL_FALSE, sizeof(glm::int8), (void *)0);
+    glVertexAttribPointer(vid_loc, 1, GL_INT, GL_FALSE, sizeof(int), (void *)0);
     checkGl();
 
     glBindVertexArray(0);
