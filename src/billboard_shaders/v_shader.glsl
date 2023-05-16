@@ -6,7 +6,7 @@ layout(location = 1) uniform vec3 cameraPosition;
 layout(location = 0) in int vertex_id;
 
 // Texture binding point for the path data
-layout(binding = 0) uniform sampler2DRect pathTexture;
+layout(binding = 1) uniform sampler2DRect pathTexture;
 
 out vec3 color;
 
@@ -19,7 +19,7 @@ vec3 loadVec3fromTex(int pos, int offset) {
     return result;
 } 
 
-void main2() {
+void main() {
     // Retrieve the instance ID
     int id_a = int(gl_InstanceID);
     int id_b = int(gl_InstanceID) + 1;
@@ -66,28 +66,3 @@ void main2() {
     gl_Position = mvp * vec4(vertexPosition, 1.0);
 }
 
-
-void main() {
-    // Retrieve the instance ID
-    uint instanceID = gl_InstanceID;
-
-    vec3 vertexPosition = vec3(0,0,0);
-    if (vertex_id == 0){
-        vertexPosition = vec3(0,0,0);
-        color = vec3(1,0,0);
-    }
-    else if (vertex_id == 1) {
-        vertexPosition = vec3(1,0,0);
-        color = vec3(0,1,0);
-    }
-    else if (vertex_id == 2) {
-        vertexPosition = vec3(1,1,0);
-        color = vec3(0,0,1);
-    }
-    else if (vertex_id == 3) {
-        vertexPosition = vec3(0,1,0);
-        color = vec3(1,1,1);
-    }
-
-    gl_Position = vec4(vertexPosition, 1.0);
-}

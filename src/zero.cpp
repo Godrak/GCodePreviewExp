@@ -212,16 +212,33 @@ void render(const billboard::BufferedPath& path) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);checkGl();
 	glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);checkGl();
 
+    //SKYBOX DRAW
+	glUseProgram(shaderProgram::skybox_program);checkGl();
+	glBindVertexArray(skybox::skyboxVAO);checkGl();
 
-    // BILLBOARDED EXTRUSION PATHS
-	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH_TEST);checkGl();
+	glDepthMask(false);checkGl();
 
+	glUniformMatrix4fv(globals::mvp_location, 1, GL_FALSE, glm::value_ptr(model_view_projection));checkGl();
+	glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));checkGl();
+	glUniform2iv(globals::screen_size_location, 1, glm::value_ptr(globals::screenResolution));checkGl();
+
+	glDrawElements(GL_TRIANGLES, skybox::indicesData.size(), GL_UNSIGNED_INT, 0);checkGl();
+
+	glEnable(GL_DEPTH_TEST);checkGl();
+	glDepthMask(true);checkGl();
+
+	glUseProgram(0);checkGl();
+	glBindVertexArray(0);checkGl();
+
+
+	// BILLBOARDED EXTRUSION PATHS
     glBindVertexArray(billboard::billboardVAO);
     glUseProgram(shaderProgram::billboard_program);
     checkGl();
 
     // Bind the texture to the texture unit 0
-    glActiveTexture(GL_TEXTURE0);
+    glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_RECTANGLE, path.pathTexture);
 	
     glUniformMatrix4fv(globals::mvp_location, 1, GL_FALSE, glm::value_ptr(model_view_projection));
@@ -232,25 +249,6 @@ void render(const billboard::BufferedPath& path) {
 
     glUseProgram(0);
     glBindVertexArray(0);
-
-    //SKYBOX DRAW
-	// glUseProgram(shaderProgram::skybox_program);checkGl();
-	// glBindVertexArray(skybox::skyboxVAO);checkGl();
-
-	// glDisable(GL_DEPTH_TEST);checkGl();
-	// glDepthMask(false);checkGl();
-
-	// glUniformMatrix4fv(globals::mvp_location, 1, GL_FALSE, glm::value_ptr(model_view_projection));checkGl();
-	// glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));checkGl();
-	// glUniform2iv(globals::screen_size_location, 1, glm::value_ptr(globals::screenResolution));checkGl();
-
-	// glDrawElements(GL_TRIANGLES, skybox::indicesData.size(), GL_UNSIGNED_INT, 0);checkGl();
-
-	// glEnable(GL_DEPTH_TEST);checkGl();
-	// glDepthMask(true);checkGl();
-
-	// glUseProgram(0);checkGl();
-	// glBindVertexArray(0);checkGl();
 
 //SWAP BUFFERS
 	glfwSwapBuffers(glfwContext::window);checkGl();

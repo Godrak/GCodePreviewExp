@@ -105,7 +105,7 @@ void init()
 
     // vertex attributes - id:
     glEnableVertexAttribArray(vid_loc);
-    glVertexAttribPointer(vid_loc, 1, GL_INT, GL_FALSE, sizeof(int), (void *)0);
+    glVertexAttribIPointer(vid_loc, 1, GL_INT, sizeof(int), (void *)0);
     checkGl();
 
     glBindVertexArray(0);
