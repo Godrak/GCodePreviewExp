@@ -90,16 +90,16 @@ std::vector<unsigned char> getSkyboxData(GLuint direction, int& width) {
 		case GL_TEXTURE_CUBE_MAP_NEGATIVE_X: //	Left
 		recStart = {1,0};
 		break;
-		case GL_TEXTURE_CUBE_MAP_POSITIVE_Y:	//Top
+		case GL_TEXTURE_CUBE_MAP_POSITIVE_Z:	//Top
 		recStart = {1,1};
 		break;
-		case GL_TEXTURE_CUBE_MAP_NEGATIVE_Y:	//Bottom
+		case GL_TEXTURE_CUBE_MAP_NEGATIVE_Z:	//Bottom
 		recStart= {3,1};
 		break;
-		case GL_TEXTURE_CUBE_MAP_POSITIVE_Z:	//Back
+		case GL_TEXTURE_CUBE_MAP_POSITIVE_Y:	//Back
 		recStart = {0,1};
 		break;
-		case GL_TEXTURE_CUBE_MAP_NEGATIVE_Z:	//Front
+		case GL_TEXTURE_CUBE_MAP_NEGATIVE_Y:	//Front
 		recStart = {2,1};
 		break;
 		default:

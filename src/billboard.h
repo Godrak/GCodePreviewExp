@@ -50,13 +50,13 @@ BufferedPath generateTestingPathPoints()
     std::vector<PathPoint>                pathPoints;
     std::mt19937                          rng(std::random_device{}()); // Random number generator
     std::uniform_real_distribution<float> colorDist(0.0f, 1.0f);       // Random color distribution
-    std::uniform_real_distribution<float> sizeDist(1.0f, 5.0f);        // Random size distribution
-    std::uniform_real_distribution<float> diffDistance(1.0f, 50.0f);   // Random size distribution
+    std::uniform_real_distribution<float> sizeDist(0.2f, 1.2f);        // Random size distribution
+    std::uniform_real_distribution<float> diffDistance(-50.0f, 50.0f);   // Random size distribution
 
-    glm::vec3 last_point = glm::vec3(diffDistance(rng), diffDistance(rng), diffDistance(rng)); 
-    for (int i = 0; i < 10; ++i) {
+    glm::vec3 last_point = glm::vec3(diffDistance(rng), diffDistance(rng), 0); 
+    for (int i = 0; i < 50; ++i) {
         PathPoint point;
-        point.pos    = last_point + glm::vec3(diffDistance(rng), diffDistance(rng), diffDistance(rng));
+        point.pos    = last_point + glm::vec3(diffDistance(rng), diffDistance(rng), 0);
         point.color  = glm::vec3(colorDist(rng), colorDist(rng), colorDist(rng)); // Random color
         point.height = sizeDist(rng);                                             // Random height between 1.0 and 5.0
         point.width  = sizeDist(rng);                                             // Random width between 1.0 and 5.0
@@ -78,7 +78,8 @@ BufferedPath generateTestingPathPoints()
     glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MAG_FILTER, GL_NEAREST); checkGl();
 
     // Allocate memory for the texture
-    glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_R32F, pathPoints.size(), 8, 0, GL_RED, GL_FLOAT, pathPoints.data()); checkGl();
+    glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_R32F, 8, pathPoints.size(), 0, GL_RED, GL_FLOAT, pathPoints.data());
+    checkGl();
 
     // Bind the texture to an image unit
     glBindImageTexture(0, result.pathTexture, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32F); checkGl();

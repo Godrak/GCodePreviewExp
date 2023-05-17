@@ -6,12 +6,12 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 
-static const glm::vec3 UP = { 0, 1, 0 };
+static const glm::vec3 UP = { 0, 0, 1 };
 
 namespace camera {
 glm::vec3 position = { 0, 10, 0 };
 glm::vec3 direction = { 0, -0.9, 0.1};
-glm::vec3 up = { 0, 1, 0 };
+glm::vec3 up = { 0, 0, 1 };
 float stepSize = 3;
 float rotationSpeed = 2;
 
