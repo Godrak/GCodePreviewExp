@@ -2,6 +2,8 @@
 #define CAMERA_H_
 
 #include "globals.h"
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -9,8 +11,8 @@
 static const glm::vec3 UP = { 0, 0, 1 };
 
 namespace camera {
-glm::vec3 position = { 0, 10, 0 };
-glm::vec3 direction = { 0, -0.9, 0.1};
+glm::vec3 position = { 0, 10, 10};
+glm::vec3 direction = { 0, -1, -1};
 glm::vec3 up = { 0, 0, 1 };
 float stepSize = 3;
 float rotationSpeed = 2;
@@ -20,7 +22,7 @@ void applyViewTransform(glm::mat4x4 &m) {
 }
 
 void applyProjectionTransform(glm::mat4x4 &m) {
-	glm::mat4x4 perspective = glm::perspective<float>(glm::radians(60.0f),
+	glm::mat4x4 perspective = glm::perspective<float>(glm::radians(45.0f),
 			(float) globals::screenResolution.x / (float) globals::screenResolution.y, 1.0f, 1000.0f);
 	m = perspective * m;
 }

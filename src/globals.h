@@ -7,9 +7,11 @@ namespace globals {
 
 glm::ivec2 screenResolution = {1600,830};
 
-GLint mvp_location = 0;
+GLint vp_location = 0;
 GLint camera_position_location = 1;
 GLint screen_size_location = 2;
+GLint view_location = 3;
+GLint projection_location = 4;
 }
 
 namespace config {
