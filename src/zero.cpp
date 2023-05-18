@@ -239,7 +239,6 @@ void render(const billboard::BufferedPath& path) {
     glUseProgram(shaderProgram::billboard_program);
     checkGl();
 
-    // Bind the texture to the texture unit 0
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_RECTANGLE, path.pathTexture);
 	

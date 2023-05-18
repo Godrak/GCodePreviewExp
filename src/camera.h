@@ -16,7 +16,7 @@ float stepSize = 3;
 float rotationSpeed = 2;
 
 void applyViewTransform(glm::mat4x4 &m) {
-	m = glm::lookAt(position, position + direction, up)*m;
+	m = glm::lookAtRH(position, position + direction, up)*m;
 }
 
 void applyProjectionTransform(glm::mat4x4 &m) {

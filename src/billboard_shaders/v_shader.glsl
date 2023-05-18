@@ -1,7 +1,7 @@
 #version 450
 
 layout(location = 0) uniform mat4 view_projection;
-layout(location = 1) uniform vec3 cameraPosition;
+layout(location = 1) uniform vec3 camera_position;
 
 layout(location = 0) in int vertex_id;
 
@@ -20,57 +20,64 @@ vec3 loadVec3fromTex(int offset, int pos) {
 } 
 
 void main() {
+    vec3 UP = vec3(0,0,1);
+
     // Retrieve the instance ID
     int id_a = int(gl_InstanceID);
     int id_b = int(gl_InstanceID) + 1;
 
-    vec3 pos_a = loadVec3fromTex(0,id_a);
-    vec3 color_a = loadVec3fromTex(3, id_a);
-    float height_a = texelFetch(pathTexture, ivec2(6, id_a)).x;
-    float width_a = texelFetch(pathTexture, ivec2(7, id_a)).x;
-
+    vec3 pos_a = loadVec3fromTex(0, id_a);
     vec3 pos_b = loadVec3fromTex(0, id_b);
-    vec3 color_b = loadVec3fromTex(3, id_b);
-    float height_b = texelFetch(pathTexture, ivec2(6, id_b)).x;
-    float width_b = texelFetch(pathTexture, ivec2(7, id_b)).x;
 
-	vec3 lineDir = pos_a - pos_b;
-    vec3 lineDirNormalized = normalize(lineDir);
-    // vec3 upVector = normalize(cross(lineDirNormalized, cameraPosition - pos_a));
-    // vec3 rightVector = normalize(cross(lineDirNormalized, upVector));
-    vec3 upVector = vec3(0,0,1);
-    vec3 rightVector = normalize(cross(lineDirNormalized, upVector));
+	vec3 line = pos_b - pos_a;
+    vec3 view_a = pos_a - camera_position;
+    vec3 view_b = pos_b - camera_position;
 
-    // Calculate the four corner points of the box
-    // vec3 topLeft = pos_a + upVector * height_a * 0.5 - rightVector * width_a * 0.5;
-    // vec3 topRight = pos_a + upVector *  height_a * 0.5 + rightVector * width_a * 0.5;
-    // vec3 bottomLeft = pos_b - upVector *  height_b * 0.5 - rightVector * width_b * 0.5;
-    // vec3 bottomRight = pos_b - upVector *  height_b * 0.5 + rightVector * width_b * 0.5;
+    //camera space
+    vec3 camera_view_dir = 0.5*(pos_a + pos_b) - camera_position;
+    vec3 camera_right_dir = normalize(cross(camera_view_dir, UP));
+    vec3 camera_up_dir = normalize(cross(camera_right_dir, camera_view_dir));
 
-    vec3 topLeft = pos_a + rightVector;
-    vec3 topRight = pos_a - rightVector;
-    vec3 bottomLeft = pos_b + rightVector;
-    vec3 bottomRight = pos_b - rightVector;
+    // directions of the line box in world space
+    vec3 line_dir = normalize(line);
+    vec3 right_dir = normalize(cross(line_dir, UP));
+    vec3 up_dir = normalize(cross(right_dir, line_dir));
 
-
-    vec3 vertexPosition = vec3(0,0,0);
-    if (vertex_id == 0){
-        vertexPosition = topLeft;
-        color = color_a;
-    }
-    else if (vertex_id == 1) {
-        vertexPosition = topRight;
-        color = color_a;
-    }
-    else if (vertex_id == 2) {
-        vertexPosition = bottomRight;
-        color = color_b;
-    }
-    else if (vertex_id == 3) {
-        vertexPosition = bottomLeft;
-        color = color_b;
+    int id_close = id_a;
+    int id_far = id_b;
+    vec3 pos_close = pos_a;
+    vec3 pos_far = pos_b;
+    float dir_sign = sign(dot(view_b, view_b) - dot(view_a, view_a));
+    if (dir_sign < 0) {
+        id_close = id_b;
+        id_far = id_a;
+        pos_close = pos_b;
+        pos_far = pos_a;
     }
 
-    gl_Position = view_projection * vec4(vertexPosition, 1.0);
+    vec3 horizontal_dir = right_dir * sign(dot(view_b, camera_right_dir) - dot(view_a, camera_right_dir));
+    vec3 vertical_dir = up_dir * dir_sign * sign(dot(view_b, camera_up_dir) - dot(view_a, camera_up_dir));
+
+    // vertex_position = pos_close + horizontal_dir + vertical_dir;  0 
+    // vertex_position = pos_close - horizontal_dir + vertical_dir;  1
+    // vertex_position = pos_close - horizontal_dir - vertical_dir;  2 
+    // vertex_position = pos_close + horizontal_dir - vertical_dir;  3
+    // vertex_position = pos_far + horizontal_dir - vertical_dir;    4
+    // vertex_position = pos_far + horizontal_dir + vertical_dir;    5
+    // vertex_position = pos_far - horizontal_dir + vertical_dir;    6
+
+    int final_id = vertex_id < 4 ? id_close : id_far;
+    vec3 final_pos = vertex_id < 4 ? pos_close : pos_far;
+
+    float hsign = (vertex_id == 1 || vertex_id == 2 || vertex_id == 6) ? -1.0 : 1.0;
+    float vsign = (vertex_id == 2 || vertex_id == 3 || vertex_id == 4) ? -1.0 : 1.0;
+
+    // float height_a = texelFetch(pathTexture, ivec2(6, id_a)).x;
+    // float width_a = texelFetch(pathTexture, ivec2(7, id_a)).x;
+
+    color = loadVec3fromTex(3, final_id);
+
+    vec3 vertex_position = final_pos + hsign * horizontal_dir * 4 + vsign * vertical_dir * 4;
+    gl_Position = view_projection * vec4(vertex_position, 1.0);
 }
 

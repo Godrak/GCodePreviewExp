@@ -28,7 +28,14 @@ std::vector<int> vertexData;
 
 void prepareData()
 {
-    vertexData = std::vector<int>{0, 1, 2, 2, 3, 0};
+    vertexData = std::vector<int>{
+        0, 1, 2,  // left side of box (for common depiction of a box, where left, right and top sides are visible)
+        0, 2, 3,
+        0, 3, 4,  // right side of box    
+        0, 4, 5, 
+        0, 5, 6, // top side of box 
+        0, 6, 1 
+        };
 }
 
 struct PathPoint
