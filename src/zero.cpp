@@ -2,7 +2,6 @@
 #include "epoxy/gl.h"
 #include <GLFW/glfw3.h>
 #include <epoxy/gl_generated.h>
-#include <glm/fwd.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -202,16 +201,14 @@ void render(const billboard::BufferedPath& path) {
 	if (config::updateCameraPosition)
 		lastCameraPosition = camera::position;
 
-	glm::mat4x4 view = glm::mat4x4(1.0);checkGl();
-	glm::mat4x4 projection = glm::mat4x4(1.0);checkGl();
-	camera::applyViewTransform(view);
-	camera::applyProjectionTransform(projection);
-	glm::mat4x4 view_projection = projection * view;
+	glm::mat4x4 view_projection = glm::mat4x4(1.0);checkGl();
+	camera::applyViewTransform(view_projection);
+	camera::applyProjectionTransform(view_projection);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_FRONT);
+	// glEnable(GL_CULL_FACE);
+	// glCullFace(GL_FRONT);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);checkGl();
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);checkGl();
@@ -246,9 +243,8 @@ void render(const billboard::BufferedPath& path) {
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_RECTANGLE, path.pathTexture);
 	
+    glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
     glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
-    glUniformMatrix4fv(globals::view_location, 1, GL_FALSE, glm::value_ptr(view));
-    glUniformMatrix4fv(globals::projection_location, 1, GL_FALSE, glm::value_ptr(projection));
     checkGl();
     glDrawArraysInstanced(GL_TRIANGLES, 0, billboard::vertexData.size(), path.point_count-1);
     checkGl();
