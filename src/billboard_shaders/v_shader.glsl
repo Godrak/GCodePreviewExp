@@ -81,10 +81,13 @@ void main() {
     half_height = 0.5* texelFetch(pathTexture, ivec2(6, final_id)).x;
     half_width = 0.5*texelFetch(pathTexture, ivec2(7, final_id)).x;
 
+    float cap_sign = vertex_id < 4 ? -1.0 : 1.0;
+    vec3 cap = (half_width - 0.001) * line_dir * dir_sign * cap_sign;
+
     vec3 horizontal_dir = half_width * right_dir * sign(dot(view_b, camera_right_dir) - dot(view_a, camera_right_dir));
     vec3 vertical_dir = half_height * up_dir * dir_sign * sign(dot(view_b, camera_up_dir) - dot(view_a, camera_up_dir));
 
-    vec3 vertex_position = final_pos + hsign * horizontal_dir * 4 + vsign * vertical_dir * 4;
+    vec3 vertex_position = final_pos + cap + hsign * horizontal_dir * 4 + vsign * vertical_dir * 4;
     pos = vertex_position;
     gl_Position = view_projection * vec4(vertex_position, 1.0);
 }

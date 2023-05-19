@@ -12,7 +12,7 @@ namespace camera {
 glm::vec3 position = { 0, 10, 10};
 glm::vec3 direction = { 0, -1, -1};
 glm::vec3 up = { 0, 0, 1 };
-float stepSize = 3;
+float stepSize = 0.5;
 float rotationSpeed = 2;
 
 void applyViewTransform(glm::mat4x4 &m) {
