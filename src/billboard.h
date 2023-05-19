@@ -66,7 +66,7 @@ BufferedPath generateTestingPathPoints()
         point.pos    = last_point + glm::vec3(diffDistance(rng), diffDistance(rng), 0);
         point.color  = glm::vec3(colorDist(rng), colorDist(rng), colorDist(rng)); // Random color
         point.height = sizeDist(rng);                                             // Random height between 1.0 and 5.0
-        point.width  = sizeDist(rng);                                             // Random width between 1.0 and 5.0
+        point.width  = 2.0*sizeDist(rng);                                             // Random width between 1.0 and 5.0
         last_point = point.pos;
         pathPoints.push_back(point);
     }

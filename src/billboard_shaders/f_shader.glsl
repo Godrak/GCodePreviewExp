@@ -1,5 +1,11 @@
 #version 450
 
+#ifdef GL_ES
+    #extension GL_EXT_frag_depth : enable
+    precision mediump float;
+#endif
+
+layout(location = 0) uniform mat4 view_projection;
 layout(location = 1) uniform vec3 camera_position;
 
 out vec4 fragmentColor;
@@ -10,7 +16,6 @@ in vec3 pos_b;
 in vec3 pos;
 in float half_height;
 in float half_width;
-in float camera_dot_up;
 
 #define eta 1e-6
 #define PI 3.1415926535897932384626433832795
@@ -45,13 +50,6 @@ void nearestPointsOnLineSegments(vec3 a0, vec3 a1, vec3 b0, vec3 b1, out vec3 A,
     dist = length(B - A);
 }
 
-// Function to get the vertical height of an ellipse at a given x-coordinate
-float getEllipseHeight(float x, float w, float h) {
-    float xNormalized = x / (w * 0.5); // Normalize x to range [-1, 1]
-    float yNormalized = h * sqrt(1.0 - xNormalized * xNormalized); // Calculate y on the ellipse
-    return yNormalized;
-}
-
 // Function to get the nearest point on a line segment
 vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 b) {
     vec3 ab = b - a;
@@ -61,29 +59,27 @@ vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 b) {
     return nearestPoint;
 }
 
-float fixedRightAngleSlerp(float start, float end, float t) {
-    return sin((1.0 - t) * PI * 0.5) * start + sin(t * PI * 0.5) * end;
-}
-
 void main() {
     vec3 UP = vec3(0,0,1);
+
 
     vec3 ray_closest;
     vec3 closest;
     float dist;
     vec3 ray_dir = normalize(pos - camera_position);
+    float verticality = dot(UP, ray_dir);
     nearestPointsOnLineSegments(pos_a, pos_b, camera_position, camera_position + ray_dir * 1000, closest, ray_closest, dist);
-    float dist_limit = fixedRightAngleSlerp(half_width, half_height, abs(camera_dot_up));
-    if (dist > dist_limit) {
+    float dist_limit = mix(half_height, half_width, abs(verticality));
+    if (dist > dist_limit * 0.9) {
         discard;
     }
 
-    float h = fixedRightAngleSlerp(half_height, half_width, abs(camera_dot_up));
+    float h = mix(half_width, half_height, abs(verticality));
     float t = (dist / dist_limit);
     float x = h * sqrt(1.0 - t*t);
 
     float rate_of_entering = 1.0 - abs(dot(ray_dir, normalize(pos_b-pos_a))); 
-    x = min(x / rate_of_entering, length(ray_closest - pos));
+    x = min(x / rate_of_entering, length(ray_closest - pos) - length(closest - ray_closest));
 
     vec3 final_pos = ray_closest - x*ray_dir;
     vec3 new_nearest = getNearestPointOnLineSegment(final_pos, pos_a, pos_b);
@@ -92,13 +88,20 @@ void main() {
 
 
     vec3 lightColor = vec3(1.0, 1.0, 1.0); // Light color (white)
-    vec3 diffuseColor = vec3(0.7, 0.7, 0.7); // Diffuse color (gray)
 
-    vec3 lightDirection = normalize(vec3(0.0, 0.0, 1.0)); // Light direction (assuming (0, 0, 1) for simplicity)
+    vec3 lightDirection = normalize(vec3(0.0, 1.0, 1.0)); // Light direction (assuming (0, 0, 1) for simplicity)
 
     float diffuseFactor = max(dot(normal, lightDirection), 0.0);
     vec3 diffuse = color * lightColor * diffuseFactor;
 
-    // Set the fragment color to the line color
-    fragmentColor = vec4(diffuse, 1.0);
+    vec4 clip = view_projection * vec4(final_pos, 1.0);
+
+    #ifdef GL_ES
+    gl_FragDepthEXT = ((gl_DepthRange.diff * clip.z / clip.w) + gl_DepthRange.near + gl_DepthRange.far) / 2.0;
+    #else
+    gl_FragDepth = ((gl_DepthRange.diff * clip.z / clip.w) + gl_DepthRange.near + gl_DepthRange.far) / 2.0;
+    #endif
+
+    fragmentColor = vec4(color * 0.6 + 0.4*diffuse, 1.0);
+
 }

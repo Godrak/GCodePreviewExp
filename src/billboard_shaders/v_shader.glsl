@@ -14,7 +14,6 @@ out vec3 pos_b;
 out vec3 pos;
 out float half_height;
 out float half_width;
-out float camera_dot_up;
 
 vec3 loadVec3fromTex(int offset, int pos) {
     vec3 result;
@@ -43,7 +42,6 @@ void main() {
     vec3 camera_view_dir = 0.5*(pos_a + pos_b) - camera_position;
     vec3 camera_right_dir = normalize(cross(camera_view_dir, UP));
     vec3 camera_up_dir = normalize(cross(camera_right_dir, camera_view_dir));
-    camera_dot_up = dot(UP, camera_up_dir);
 
     // directions of the line box in world space
     vec3 line_dir = normalize(line);
@@ -87,7 +85,7 @@ void main() {
     vec3 horizontal_dir = half_width * right_dir * sign(dot(view_b, camera_right_dir) - dot(view_a, camera_right_dir));
     vec3 vertical_dir = half_height * up_dir * dir_sign * sign(dot(view_b, camera_up_dir) - dot(view_a, camera_up_dir));
 
-    vec3 vertex_position = final_pos + cap + hsign * horizontal_dir * 4 + vsign * vertical_dir * 4;
+    vec3 vertex_position = final_pos + cap + hsign * horizontal_dir + vsign * vertical_dir;
     pos = vertex_position;
     gl_Position = view_projection * vec4(vertex_position, 1.0);
 }
