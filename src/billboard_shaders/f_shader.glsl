@@ -99,7 +99,7 @@ void main() {
     // compute width and height of cross section of the thick line in the plane defined by line and ray
     float wpart = dot(ray_dir, line_right_dir);
     float hpart = dot(ray_dir, line_up_dir);
-    vec2 projected = vec2(abs(wpart), abs(hpart));
+    vec2 projected = normalize(vec2(abs(wpart), abs(hpart)));
     projected  = vec2(sqrt(projected.x), sqrt(projected.y));
 
     vec2 wh_close = vec2(projected.x * half_width_close, projected.y * half_height_close);
@@ -120,7 +120,7 @@ void main() {
     // Compute new line, which should be at the surface of the thick line and cross the ray
     vec3 thickness_vec_close = wh_close.x * w_sign * line_right_dir + wh_close.y * h_sign * line_up_dir; 
     vec3 thickness_vec_far = wh_far.x * w_sign * line_right_dir + wh_far.y * h_sign * line_up_dir;
-    float factor = 1;
+    float factor = 1.0;
     vec3 surface_line_close = pos_close + to_ray + thickness_vec_close * factor;
     vec3 surface_line_far = pos_far + to_ray + thickness_vec_far * factor;
 
