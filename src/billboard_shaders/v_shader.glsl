@@ -8,12 +8,9 @@ layout(location = 0) in int vertex_id;
 // Texture binding point for the path data
 layout(binding = 1) uniform sampler2DRect pathTexture;
 
-out vec3 color;
-out vec3 pos_a;
-out vec3 pos_b;
+out flat int id_close;
+out flat int id_far;
 out vec3 pos;
-out float half_height;
-out float half_width;
 
 vec3 loadVec3fromTex(int offset, int pos) {
     vec3 result;
@@ -31,8 +28,8 @@ void main() {
     int id_a = int(gl_InstanceID);
     int id_b = int(gl_InstanceID) + 1;
 
-    pos_a = loadVec3fromTex(0, id_a);
-    pos_b = loadVec3fromTex(0, id_b);
+    vec3 pos_a = loadVec3fromTex(0, id_a);
+    vec3 pos_b = loadVec3fromTex(0, id_b);
 
 	vec3 line = pos_b - pos_a;
     vec3 view_a = pos_a - camera_position;
@@ -48,8 +45,8 @@ void main() {
     vec3 right_dir = normalize(cross(line_dir, UP));
     vec3 up_dir = normalize(cross(right_dir, line_dir));
 
-    int id_close = id_a;
-    int id_far = id_b;
+    id_close = id_a;
+    id_far = id_b;
     vec3 pos_close = pos_a;
     vec3 pos_far = pos_b;
     float dir_sign = sign(dot(view_b, view_b) - dot(view_a, view_a));
@@ -71,13 +68,11 @@ void main() {
     int final_id = vertex_id < 4 ? id_close : id_far;
     vec3 final_pos = vertex_id < 4 ? pos_close : pos_far;
     
-    color = loadVec3fromTex(3, final_id);
-
     float hsign = (vertex_id == 1 || vertex_id == 2 || vertex_id == 6) ? -1.0 : 1.0;
     float vsign = (vertex_id == 2 || vertex_id == 3 || vertex_id == 4) ? -1.0 : 1.0;
 
-    half_height = 0.5* texelFetch(pathTexture, ivec2(6, final_id)).x;
-    half_width = 0.5*texelFetch(pathTexture, ivec2(7, final_id)).x;
+    float half_height = 0.5* texelFetch(pathTexture, ivec2(6, final_id)).x;
+    float half_width = 0.5*texelFetch(pathTexture, ivec2(7, final_id)).x;
 
     float cap_sign = vertex_id < 4 ? -1.0 : 1.0;
     vec3 cap = (half_width - 0.001) * line_dir * dir_sign * cap_sign;
