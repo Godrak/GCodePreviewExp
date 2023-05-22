@@ -113,6 +113,8 @@ void main() {
 
     float tt = dist / thickness;
     vec3 to_ray = ray_closest - closest;
+    if (tt > 1) {discard;}
+
 
     float w_sign = -sign(wpart);
     float h_sign = -sign(hpart);
@@ -120,7 +122,7 @@ void main() {
     // Compute new line, which should be at the surface of the thick line and cross the ray
     vec3 thickness_vec_close = wh_close.x * w_sign * line_right_dir + wh_close.y * h_sign * line_up_dir; 
     vec3 thickness_vec_far = wh_far.x * w_sign * line_right_dir + wh_far.y * h_sign * line_up_dir;
-    float factor = 1.0;
+    float factor = sqrt(1-tt*tt);
     vec3 surface_line_close = pos_close + to_ray + thickness_vec_close * factor;
     vec3 surface_line_far = pos_far + to_ray + thickness_vec_far * factor;
 
@@ -151,7 +153,8 @@ void main() {
     vec3 lightDirection = normalize(vec3(0.0, 0.0, 1.0)); // Light direction (assuming (0, 0, 1) for simplicity)
 
     float diffuseFactor = max(dot(normal, lightDirection), 0.0);
-    vec3 diffuse = color * lightColor * diffuseFactor;
+    float diffuseFactor2 = max(dot(normal, -lightDirection), 0.0);
+    vec3 diffuse = color * lightColor * (diffuseFactor + diffuseFactor2);
 
     vec4 clip = view_projection * vec4(surface_point, 1.0);
 
