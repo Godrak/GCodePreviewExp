@@ -8,8 +8,8 @@ layout(location = 0) in int vertex_id;
 // Texture binding point for the path data
 layout(binding = 1) uniform sampler2DRect pathTexture;
 
-out flat int id_close;
-out flat int id_far;
+out flat int id_a;
+out flat int id_b;
 out vec3 pos;
 
 vec3 loadVec3fromTex(int offset, int pos) {
@@ -25,8 +25,8 @@ void main() {
     vec3 UP = vec3(0,0,1);
 
     // Retrieve the instance ID
-    int id_a = int(gl_InstanceID);
-    int id_b = int(gl_InstanceID) + 1;
+    id_a = int(gl_InstanceID);
+    id_b = int(gl_InstanceID) + 1;
 
     vec3 pos_a = loadVec3fromTex(0, id_a);
     vec3 pos_b = loadVec3fromTex(0, id_b);
@@ -45,8 +45,8 @@ void main() {
     vec3 right_dir = normalize(cross(line_dir, UP));
     vec3 up_dir = normalize(cross(right_dir, line_dir));
 
-    id_close = id_a;
-    id_far = id_b;
+    int id_close = id_a;
+    int id_far = id_b;
     vec3 pos_close = pos_a;
     vec3 pos_far = pos_b;
     float dir_sign = sign(dot(view_b, view_b) - dot(view_a, view_a));

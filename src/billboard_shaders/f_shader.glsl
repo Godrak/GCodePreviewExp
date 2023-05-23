@@ -12,8 +12,8 @@ layout(binding = 1) uniform sampler2DRect pathTexture;
 
 out vec4 fragmentColor;
 
-in flat int id_close;
-in flat int id_far;
+in flat int id_a;
+in flat int id_b;
 in vec3 pos;
 
 vec3 loadVec3fromTex(int offset, int pos) {
@@ -67,15 +67,74 @@ vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 b) {
     return nearestPoint;
 }
 
+
+// Function to calculate the intersection point between a ray and an ellipsoid
+vec3 intersectEllipsoid(vec3 origin, vec3 direction, vec3 ellipsoidCenter, vec3 ellipsoidRadii, out float t) {
+    vec3 oc = origin - ellipsoidCenter;
+    vec3 d = direction;
+
+    // Apply quadratic equation coefficients
+    vec3 invRadii = 1.0 / ellipsoidRadii;
+    vec3 dScaled = d * invRadii;
+    vec3 ocScaled = oc * invRadii;
+
+    float A = dot(dScaled, dScaled);
+    float B = 2.0 * dot(dScaled, ocScaled);
+    float C = dot(ocScaled, ocScaled) - 1.0;
+
+    float discriminant = B * B - 4.0 * A * C;
+
+    // If the discriminant is negative, there is no intersection
+    if (discriminant < 0.0) {
+        t = -1;
+        return vec3(0.0);
+    }
+
+    // Calculate the intersection point(s) using the quadratic formula
+    float t1 = (-B - sqrt(discriminant)) / (2.0 * A);
+    float t2 = (-B + sqrt(discriminant)) / (2.0 * A);
+
+    // Choose the closest intersection point
+    t = min(t1, t2);
+
+    return origin + t * direction;
+}
+
+
+// Function to calculate the intersection point between a ray and a sphere
+vec3 intersectSphere(vec3 origin, vec3 direction, vec3 sphereCenter, float sphereRadius, out float t) {
+    vec3 oc = origin - sphereCenter;
+    float a = dot(direction, direction);
+    float b = 2.0 * dot(oc, direction);
+    float c = dot(oc, oc) - sphereRadius * sphereRadius;
+    float discriminant = b * b - 4.0 * a * c;
+
+    // If the discriminant is negative, there is no intersection
+    if (discriminant < 0.0) {
+        t = -1;
+        return vec3(0.0);
+    }
+
+    // Calculate the intersection point(s) using the quadratic formula
+    float t1 = (-b - sqrt(discriminant)) / (2.0 * a);
+    float t2 = (-b + sqrt(discriminant)) / (2.0 * a);
+
+    // Choose the closest intersection point
+    t = min(t1, t2);
+
+    return origin + t * direction;
+}
+
+
 void main() {
     vec3 UP = vec3(0,0,1);
 
-    vec3 pos_close = loadVec3fromTex(0, id_close);
-    vec3 pos_far = loadVec3fromTex(0, id_far);
-    float half_height_close = 0.5* texelFetch(pathTexture, ivec2(6, id_close)).x;
-    float half_width_close = 0.5*texelFetch(pathTexture, ivec2(7, id_close)).x;
-    float half_height_far = 0.5* texelFetch(pathTexture, ivec2(6, id_far)).x;
-    float half_width_far = 0.5*texelFetch(pathTexture, ivec2(7, id_far)).x;
+    vec3 pos_a = loadVec3fromTex(0, id_a);
+    vec3 pos_b = loadVec3fromTex(0, id_b);
+    float half_height_a = 0.5* texelFetch(pathTexture, ivec2(6, id_a)).x;
+    float half_width_a = 0.5*texelFetch(pathTexture, ivec2(7, id_a)).x;
+    float half_height_b = 0.5* texelFetch(pathTexture, ivec2(6, id_b)).x;
+    float half_width_b = 0.5*texelFetch(pathTexture, ivec2(7, id_b)).x;
 
     //ray space
     vec3 ray_dir = normalize(pos - camera_position);
@@ -83,70 +142,29 @@ void main() {
     vec3 ray_up_dir = normalize(cross(ray_right_dir, ray_dir));
 
     // directions of the line box in world space
-    vec3 line = pos_far - pos_close;
+    vec3 line = pos_b - pos_a;
     float line_len = length(line); 
     vec3 line_dir = line / line_len;
     vec3 line_right_dir = normalize(cross(line_dir, UP));
     vec3 line_up_dir = normalize(cross(line_right_dir, line_dir));
 
-    // find nearest points of ray and line
-    vec3 ray_closest;
-    vec3 closest;
-    float dist;
-    float max_distance_inside = 1000*line_len + half_height_far + half_height_close + half_width_close + half_width_far; // conservative limit 
-    nearestPointsOnLineSegments(pos_close, pos_far, camera_position, pos + ray_dir * max_distance_inside, closest, ray_closest, dist);
- 
-    // compute width and height of cross section of the thick line in the plane defined by line and ray
-    float wpart = dot(ray_dir, line_right_dir);
-    float hpart = dot(ray_dir, line_up_dir);
-    vec2 projected = normalize(vec2(abs(wpart), abs(hpart)));
-    projected  = vec2(sqrt(projected.x), sqrt(projected.y));
+    vec3 color_a = loadVec3fromTex(3, id_a);
+    vec3 color_b = loadVec3fromTex(3, id_b);
 
-    vec2 wh_close = vec2(projected.x * half_width_close, projected.y * half_height_close);
-    vec2 wh_far = vec2(projected.x * half_width_far, projected.y * half_height_far);
+    float ray_t_a = -1;
+    vec3 surface_point_a = intersectEllipsoid(pos - 2*ray_dir, ray_dir, pos_a, vec3(half_width_a, half_width_a, half_height_a), ray_t_a);
+    vec3 color = color_a;
+    vec3 normal = normalize(surface_point_a - pos_a);
 
-    // now also consider the offset from the center, the above width and height work only for rays going through line
-    float t = length(closest - pos_close) / line_len;
-    float wt = mix(half_width_close, half_width_far, t);
-    float ht = mix(half_height_close, half_height_far, t);
-    float thickness = length(vec2(projected.y * wt, projected.x * ht));
+    float ray_t_b = -1;
+    vec3 surface_point_b = intersectEllipsoid(pos - 2*ray_dir, ray_dir, pos_b, vec3(half_height_b, half_height_b, half_height_b), ray_t_b);
+    if (ray_t_a < 0 && ray_t_b < 0) discard;
 
-    float tt = dist / thickness;
-    vec3 to_ray = ray_closest - closest;
-    if (tt > 1) {discard;}
-
-
-    float w_sign = -sign(wpart);
-    float h_sign = -sign(hpart);
-
-    // Compute new line, which should be at the surface of the thick line and cross the ray
-    vec3 thickness_vec_close = wh_close.x * w_sign * line_right_dir + wh_close.y * h_sign * line_up_dir; 
-    vec3 thickness_vec_far = wh_far.x * w_sign * line_right_dir + wh_far.y * h_sign * line_up_dir;
-    float factor = sqrt(1-tt*tt);
-    vec3 surface_line_close = pos_close + to_ray + thickness_vec_close * factor;
-    vec3 surface_line_far = pos_far + to_ray + thickness_vec_far * factor;
-
-    // now compute intersection with the surface line
-    vec3 surface_point;
-    vec3 ray_point;
-    float new_dist;
-    nearestPointsOnLineSegments(surface_line_close, surface_line_far, camera_position, camera_position + ray_dir * max_distance_inside, surface_point, ray_point, new_dist);
-
-    vec3 line_nearest = getNearestPointOnLineSegment(surface_point, pos_close, pos_far);
-    float t3 = length(line_nearest - pos_close) / line_len;
-    float wt3 = mix(half_width_close, half_width_far, t3);
-    float ht3 = mix(half_height_close, half_height_far, t3);
-    float thickness3 = length(vec2(projected.y * wt3, projected.x * ht3));
-
-    if (dist > thickness3) {discard;}
-
-    vec3 normal = normalize(surface_point - line_nearest);
-
-    vec3 color_close = loadVec3fromTex(3, id_close);
-    vec3 color_far = loadVec3fromTex(3, id_far);
-
-    // vec3 color = vec3(new_dist);
-    vec3 color = mix(color_close, color_far, length(line_nearest - pos_close) / line_len); 
+    if (ray_t_a < 0 || (ray_t_b > 0 && ray_t_b < ray_t_a)) {
+        surface_point_a = surface_point_b;
+        color = color_b;
+        normal = normalize(surface_point_b - pos_b);
+    }
 
     vec3 lightColor = vec3(1.0, 1.0, 1.0); // Light color (white)
 
@@ -156,7 +174,7 @@ void main() {
     float diffuseFactor2 = max(dot(normal, -lightDirection), 0.0);
     vec3 diffuse = color * lightColor * (diffuseFactor + diffuseFactor2);
 
-    vec4 clip = view_projection * vec4(surface_point, 1.0);
+    vec4 clip = view_projection * vec4(surface_point_a, 1.0);
 
     #ifdef GL_ES
     gl_FragDepthEXT = ((gl_DepthRange.diff * clip.z / clip.w) + gl_DepthRange.near + gl_DepthRange.far) / 2.0;
