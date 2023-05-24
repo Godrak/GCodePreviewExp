@@ -28,7 +28,7 @@ vec3 loadVec3fromTex(int offset, int pos) {
 #define eta 1e-6
 #define PI 3.1415926535897932384626433832795
 
-void nearestPointsOnLineSegments(vec3 a0, vec3 a1, vec3 b0, vec3 b1, out vec3 A, out vec3 B, out float dist) {
+void nearestPointsOnLineSegments(vec3 a0, vec3 a1, vec3 b0, vec3 b1, out vec3 A, out vec3 B) {
     vec3 r = b0 - a0;
     vec3 u = a1 - a0;
     vec3 v = b1 - b0;
@@ -55,13 +55,12 @@ void nearestPointsOnLineSegments(vec3 a0, vec3 a1, vec3 b0, vec3 b1, out vec3 A,
 
     A = a0 + S * u;
     B = b0 + T * v;
-    dist = length(B - A);
 }
 
 // Function to get the nearest point on a line segment
-vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 b) {
+vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 b, out float t) {
     vec3 ab = b - a;
-    float t = dot(p - a, ab) / dot(ab, ab);
+    t = dot(p - a, ab) / dot(ab, ab);
     t = clamp(t, 0.0, 1.0);
     vec3 nearestPoint = a + t * ab;
     return nearestPoint;
@@ -100,6 +99,19 @@ vec3 intersectEllipsoid(vec3 origin, vec3 direction, vec3 ellipsoidCenter, vec3 
     return origin + t * direction;
 }
 
+vec3 calculateClosestPointOnEllipsoid(vec3 point, vec3 ellipsoidCenter, vec3 ellipsoidRadii) {
+    vec3 oc = point - ellipsoidCenter;
+    vec3 invRadii = 1.0 / ellipsoidRadii;
+    vec3 ocScaled = oc * invRadii;
+
+    // Normalize the scaled vector
+    vec3 scaledDirection = normalize(ocScaled);
+
+    // Calculate the closest point on the ellipsoid surface
+    vec3 closestPoint = ellipsoidCenter + ellipsoidRadii * scaledDirection;
+
+    return closestPoint;
+}
 
 // Function to calculate the intersection point between a ray and a sphere
 vec3 intersectSphere(vec3 origin, vec3 direction, vec3 sphereCenter, float sphereRadius, out float t) {
@@ -124,7 +136,6 @@ vec3 intersectSphere(vec3 origin, vec3 direction, vec3 sphereCenter, float spher
 
     return origin + t * direction;
 }
-
 
 void main() {
     vec3 UP = vec3(0,0,1);
@@ -151,20 +162,32 @@ void main() {
     vec3 color_a = loadVec3fromTex(3, id_a);
     vec3 color_b = loadVec3fromTex(3, id_b);
 
-    float ray_t_a = -1;
-    vec3 surface_point_a = intersectEllipsoid(pos - 2*ray_dir, ray_dir, pos_a, vec3(half_width_a, half_width_a, half_height_a), ray_t_a);
-    vec3 color = color_a;
-    vec3 normal = normalize(surface_point_a - pos_a);
+    vec3 radii_a = vec3(half_width_a, half_width_a, half_height_a);
+    vec3 radii_b = vec3(half_width_b, half_width_b, half_height_b);
 
-    float ray_t_b = -1;
-    vec3 surface_point_b = intersectEllipsoid(pos - 2*ray_dir, ray_dir, pos_b, vec3(half_height_b, half_height_b, half_height_b), ray_t_b);
-    if (ray_t_a < 0 && ray_t_b < 0) discard;
+    float line_t0 = 0;
+    vec3 center_0 = getNearestPointOnLineSegment(pos, pos_a, pos_b, line_t0);
+    vec3 radii_0 = mix(radii_a, radii_b, line_t0);
+    float ray_t0 = 0;
+    vec3 surface_point0 = intersectEllipsoid(pos - ray_dir, ray_dir, center_0, radii_0, ray_t0);
 
-    if (ray_t_a < 0 || (ray_t_b > 0 && ray_t_b < ray_t_a)) {
-        surface_point_a = surface_point_b;
-        color = color_b;
-        normal = normalize(surface_point_b - pos_b);
-    }
+    float max_dist = line_len + half_width_a + half_width_b + half_height_a + half_height_b;
+    vec3 closest_on_line;
+    vec3 closest_on_ray;
+    nearestPointsOnLineSegments(pos_a, pos_b, pos, pos + ray_dir * max_dist, closest_on_line, closest_on_ray);
+    float line_t1 = dot(closest_on_line - pos_a, line) / dot(line,line);
+    vec3 radii_1 = mix(radii_a, radii_b, line_t1);
+    float ray_t1;
+    intersectEllipsoid(pos - ray_dir, ray_dir, mix(pos_a,pos_b,line_t1), radii_1, ray_t1);
+    if (ray_t1 < 0) discard;
+
+    float line_t = mix(line_t1, line_t0, abs(dot(ray_dir, line_dir)));
+    vec3 radii = mix(radii_a, radii_b, line_t);
+    vec3 center = mix(pos_a,pos_b,line_t);
+    vec3 color = mix(color_a, color_b, line_t);
+    float rt;
+    vec3 surface_point = intersectEllipsoid(pos - ray_dir, ray_dir, center, radii, rt);
+    vec3 normal = normalize(surface_point - center);
 
     vec3 lightColor = vec3(1.0, 1.0, 1.0); // Light color (white)
 
@@ -174,7 +197,7 @@ void main() {
     float diffuseFactor2 = max(dot(normal, -lightDirection), 0.0);
     vec3 diffuse = color * lightColor * (diffuseFactor + diffuseFactor2);
 
-    vec4 clip = view_projection * vec4(surface_point_a, 1.0);
+    vec4 clip = view_projection * vec4(surface_point, 1.0);
 
     #ifdef GL_ES
     gl_FragDepthEXT = ((gl_DepthRange.diff * clip.z / clip.w) + gl_DepthRange.near + gl_DepthRange.far) / 2.0;
