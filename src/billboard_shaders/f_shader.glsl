@@ -26,8 +26,7 @@ vec3 loadVec3fromTex(int offset, int pos) {
 } 
 
 // Function to get the nearest point on a line segment
-vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 b, out float t) {
-    vec3 ab = b - a;
+vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 ab, out float t) {
     t = dot(p - a, ab) / dot(ab, ab);
     t = clamp(t, 0.0, 1.0);
     vec3 nearestPoint = a + t * ab;
@@ -65,6 +64,8 @@ void main() {
     vec3 ray_dir = normalize(pos - camera_position);
     // directions of the line box in world space
     float line_len = length(pos_a-pos_b); 
+    vec3 line = pos_b-pos_a;
+    vec3 line_dir = (pos_a-pos_b) / line_len; 
 
     vec3 color_a = loadVec3fromTex(3, id_a);
     vec3 color_b = loadVec3fromTex(3, id_b);
@@ -74,24 +75,18 @@ void main() {
     float traversed = 0;
     vec3 surface_point = pos;
     float lt;
-    vec3 last_center = getNearestPointOnLineSegment(surface_point, pos_a, pos_b, lt);
+    vec3 last_center = getNearestPointOnLineSegment(surface_point, pos_a, line, lt);
     vec3 radii = mix(radii_a, radii_b, lt);
     vec3 s = calculateClosestPointOnEllipsoid(surface_point, last_center, radii);
     float last_depth = length(surface_point - s) * sign(dot(surface_point - s, s - last_center));
 
     int iter = 0;
-    while (traversed < limit && last_depth > 0.05) {
-        float dist = max(last_depth, 0.05);
-        surface_point = surface_point + ray_dir *  last_depth;
-        traversed += last_depth;
+    while (traversed < limit && last_depth > 0 && iter < 5) {
+        float dist = max(last_depth*0.8, 1e-6);
+        surface_point = surface_point + ray_dir *  dist;
+        traversed += dist;
 
-        vec3 center = getNearestPointOnLineSegment(surface_point, pos_a, pos_b, lt);
-        // if (center == last_center) {
-        //     float t;
-        //     surface_point = intersectEllipsoid(pos - ray_dir, ray_dir, center, radii, t);
-        //     if (t<0) discard;
-        //     break;
-        // }
+        vec3 center = getNearestPointOnLineSegment(surface_point, pos_a, line, lt);
 
         last_center = center;
         radii = mix(radii_a, radii_b, lt);
@@ -101,7 +96,7 @@ void main() {
         last_depth = depth;
         iter++;
     }
-    
+
     vec3 color = mix(color_a, color_b, lt);
 
     vec3 normal = normalize(surface_point - last_center);
