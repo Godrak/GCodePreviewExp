@@ -57,7 +57,7 @@ BufferedPath generateTestingPathPoints()
     std::vector<PathPoint>                pathPoints;
     std::mt19937                          rng(std::random_device{}()); // Random number generator
     std::uniform_real_distribution<float> colorDist(0.0f, 1.0f);       // Random color distribution
-    std::uniform_real_distribution<float> sizeDist(0.2f, 5.0f);        // Random size distribution
+    std::uniform_real_distribution<float> sizeDist(0.05f, 1.0f);        // Random size distribution
     std::uniform_real_distribution<float> diffDistance(-50.0f, 50.0f);   // Random size distribution
 
     glm::vec3 last_point = glm::vec3(diffDistance(rng), diffDistance(rng), 0); 
@@ -65,8 +65,8 @@ BufferedPath generateTestingPathPoints()
         PathPoint point;
         point.pos    = last_point + glm::vec3(diffDistance(rng), diffDistance(rng), 0);
         point.color  = glm::vec3(colorDist(rng), colorDist(rng), colorDist(rng)); // Random color
-        point.height = sizeDist(rng);                                             // Random height between 1.0 and 5.0
-        point.width  = 2.0*sizeDist(rng);                                             // Random width between 1.0 and 5.0
+        point.height = 0.05;//sizeDist(rng);                                             // Random height between 1.0 and 5.0
+        point.width  = 1.0;//2.0*sizeDist(rng);                                             // Random width between 1.0 and 5.0
         last_point = point.pos;
         pathPoints.push_back(point);
     }

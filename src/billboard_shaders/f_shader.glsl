@@ -25,39 +25,6 @@ vec3 loadVec3fromTex(int offset, int pos) {
     return result;
 } 
 
-#define eta 1e-6
-#define PI 3.1415926535897932384626433832795
-#define UP vec3(0,0,1)
-
-void nearestPointsOnLineSegments(vec3 a0, vec3 a1, vec3 b0, vec3 b1, out vec3 A, out vec3 B) {
-    vec3 r = b0 - a0;
-    vec3 u = a1 - a0;
-    vec3 v = b1 - b0;
-
-    float ru = dot(r, u);
-    float rv = dot(r, v);
-    float uu = dot(u, u);
-    float uv = dot(u, v);
-    float vv = dot(v, v);
-
-    float det = uu * vv - uv * uv;
-    float s, t;
-
-    if (det < eta * uu * vv) {
-        s = clamp(ru / uu, 0.0, 1.0);
-        t = 0.0;
-    } else {
-        s = clamp((ru * vv - rv * uv) / det, 0.0, 1.0);
-        t = clamp((ru * uv - rv * uu) / det, 0.0, 1.0);
-    }
-
-    float S = clamp((t * uv + ru) / uu, 0.0, 1.0);
-    float T = clamp((s * uv - rv) / vv, 0.0, 1.0);
-
-    A = a0 + S * u;
-    B = b0 + T * v;
-}
-
 // Function to get the nearest point on a line segment
 vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 b, out float t) {
     vec3 ab = b - a;
@@ -152,15 +119,11 @@ void main() {
 
     //ray space
     vec3 ray_dir = normalize(pos - camera_position);
-    vec3 ray_right_dir = normalize(cross(ray_dir, UP));
-    vec3 ray_up_dir = normalize(cross(ray_right_dir, ray_dir));
 
     // directions of the line box in world space
     vec3 line = pos_b - pos_a;
     float line_len = length(line); 
     vec3 line_dir = line / line_len;
-    vec3 line_right_dir = normalize(cross(line_dir, UP));
-    vec3 line_up_dir = normalize(cross(line_right_dir, line_dir));
 
     vec3 color_a = loadVec3fromTex(3, id_a);
     vec3 color_b = loadVec3fromTex(3, id_b);
@@ -170,7 +133,6 @@ void main() {
 
     float lt;
     vec3 center = getNearestPointOnLineSegment(pos, pos_a, pos_b, lt);
-    vec3 color = mix(color_a, color_b, lt);
     vec3 radii = mix(radii_a, radii_b, lt);
     vec3 c = calculateClosestPointOnEllipsoid(pos, center, radii);
 
@@ -180,18 +142,15 @@ void main() {
     vec3 c2 = intersectCylinder(pos, ray_dir, pos_a, pos_b, 0.8*distance_to_center, t1);
     float lt2;
     center = getNearestPointOnLineSegment(c2, pos_a, pos_b, lt2);
-    color = mix(color_a, color_b, lt2);
     radii = mix(radii_a, radii_b, lt2);
 
     float t2;
     vec3 surface_point = intersectEllipsoid(pos - ray_dir, ray_dir, center, radii, t2);
     if (t2<0) discard;
-    // vec3 surface_point = c2;
 
-    vec3 cf =surface_point;// mix(surface_point, c, (max(length(c2 - c) - length(radii),0) / line_len));
-    vec3 cp = getNearestPointOnLineSegment(cf, pos_a, pos_b, lt2);
-
-    vec3 normal = normalize(cf - cp);
+    vec3 cp = getNearestPointOnLineSegment(surface_point, pos_a, pos_b, lt2);
+    vec3 color = mix(color_a, color_b, lt2);
+    vec3 normal = normalize(surface_point - cp);
 
 
     vec3 lightColor = vec3(1.0, 1.0, 1.0); // Light color (white)
@@ -213,33 +172,3 @@ void main() {
     fragmentColor = vec4(diffuse, 1.0);
 
 }
-
-
-
-
-
-// float tl;
-    // vec3 center = getNearestPointOnLineSegment(pos, pos_a, pos_b, tl);
-    // vec3 radii = mix(radii_a, radii_b, tl);
-    // vec3 color = mix(color_a, color_b, tl);
-// 
-// 
-    // float t;
-    // vec3 surface_point = intersectEllipsoid(pos - line_len * ray_dir, ray_dir, center, radii, t);
-    // vec3 surface_closest = calculateClosestPointOnEllipsoid(surface_point, center, radii);
-    // vec3 depth_to_cross = surface_point - surface_closest;
-    // 
-    // float alfa = acos(dot(line_dir, ray_dir));
-    // float dist_to_cross = length(depth_to_cross) * tan(alfa);
-// 
-    // vec3 c = center + line_dir * dist_to_cross;
-    // float tl2 = dot(c - pos_a, line) / dot(line,line);
-    // tl2 = clamp(tl2, 0.0, 1.0);
-// 
-    // center = mix(pos_a,pos_b, tl2);
-    // radii = mix(radii_a, radii_b, tl2);
-    // color = mix(color_a, color_b, tl2);
-// 
-    // float t2;
-    // surface_point = intersectEllipsoid(pos -line_len * ray_dir, ray_dir, center, radii, t2);
-    // if (t2<0) discard;
