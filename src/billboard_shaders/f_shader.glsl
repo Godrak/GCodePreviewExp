@@ -92,7 +92,7 @@ void main() {
         radii = mix(radii_a, radii_b, lt);
         s = calculateClosestPointOnEllipsoid(surface_point, center, radii);
         float depth = length(surface_point - s) * sign(dot(surface_point - s, s - last_center));
-        if (depth > last_depth) discard;
+        if (depth - 1e-4 > last_depth) discard;
         last_depth = depth;
         iter++;
     }
