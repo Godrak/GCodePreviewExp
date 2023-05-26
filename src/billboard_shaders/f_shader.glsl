@@ -115,6 +115,9 @@ vec3 intersectCylinder(vec3 rayOrigin, vec3 rayDirection, vec3 cylinderA, vec3 c
     float c = baba * dot(oa, oa) - baoa * baoa - cylinderRadius * cylinderRadius * baba;
     
     float discriminant = b * b - a * c;
+    // t = (-b - log(discriminant)) / a;
+    // return rayOrigin + t * dir;
+
     if (discriminant < 0.0) {
         t = (-b) / a;
         return rayOrigin + t * dir;
@@ -175,7 +178,6 @@ void main() {
     
     float t1;
     vec3 c2 = intersectCylinder(pos, ray_dir, pos_a, pos_b, 0.8*distance_to_center, t1);
-    c2 = 0.8*c2 + 0.2*c;
     float lt2;
     center = getNearestPointOnLineSegment(c2, pos_a, pos_b, lt2);
     color = mix(color_a, color_b, lt2);
