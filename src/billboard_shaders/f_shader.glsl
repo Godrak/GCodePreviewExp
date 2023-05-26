@@ -27,6 +27,7 @@ vec3 loadVec3fromTex(int offset, int pos) {
 
 #define eta 1e-6
 #define PI 3.1415926535897932384626433832795
+#define UP vec3(0,0,1)
 
 void nearestPointsOnLineSegments(vec3 a0, vec3 a1, vec3 b0, vec3 b1, out vec3 A, out vec3 B) {
     vec3 r = b0 - a0;
@@ -66,7 +67,6 @@ vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 b, out float t) {
     return nearestPoint;
 }
 
-
 // Function to calculate the intersection point between a ray and an ellipsoid
 vec3 intersectEllipsoid(vec3 origin, vec3 direction, vec3 ellipsoidCenter, vec3 ellipsoidRadii, out float t) {
     vec3 oc = origin - ellipsoidCenter;
@@ -86,7 +86,8 @@ vec3 intersectEllipsoid(vec3 origin, vec3 direction, vec3 ellipsoidCenter, vec3 
     // If the discriminant is negative, there is no intersection
     if (discriminant < 0.0) {
         t = -1;
-        return vec3(0.0);
+        float tt = (-B) / (2.0 * A);
+        return origin + tt * direction;
     }
 
     // Calculate the intersection point(s) using the quadratic formula
@@ -97,6 +98,30 @@ vec3 intersectEllipsoid(vec3 origin, vec3 direction, vec3 ellipsoidCenter, vec3 
     t = min(t1, t2);
 
     return origin + t * direction;
+}
+
+vec3 intersectCylinder(vec3 rayOrigin, vec3 rayDirection, vec3 cylinderA, vec3 cylinderB, float cylinderRadius, out float t) {
+    vec3 ba = cylinderB - cylinderA;
+    vec3 oa = rayOrigin - cylinderA;
+    vec3 dir = normalize(rayDirection);
+    
+    float baba = dot(ba, ba);
+    float bard = dot(ba, dir);
+    float baoa = dot(ba, oa);
+    float rdoa = dot(dir, oa);
+    
+    float a = baba - bard * bard;
+    float b = baba * rdoa - baoa * bard;
+    float c = baba * dot(oa, oa) - baoa * baoa - cylinderRadius * cylinderRadius * baba;
+    
+    float discriminant = b * b - a * c;
+    if (discriminant < 0.0) {
+        t = (-b) / a;
+        return rayOrigin + t * dir;
+    } else {
+        t = (-b - sqrt(discriminant)) / a;
+        return rayOrigin + t * dir;
+    }
 }
 
 vec3 calculateClosestPointOnEllipsoid(vec3 point, vec3 ellipsoidCenter, vec3 ellipsoidRadii) {
@@ -113,32 +138,7 @@ vec3 calculateClosestPointOnEllipsoid(vec3 point, vec3 ellipsoidCenter, vec3 ell
     return closestPoint;
 }
 
-// Function to calculate the intersection point between a ray and a sphere
-vec3 intersectSphere(vec3 origin, vec3 direction, vec3 sphereCenter, float sphereRadius, out float t) {
-    vec3 oc = origin - sphereCenter;
-    float a = dot(direction, direction);
-    float b = 2.0 * dot(oc, direction);
-    float c = dot(oc, oc) - sphereRadius * sphereRadius;
-    float discriminant = b * b - 4.0 * a * c;
-
-    // If the discriminant is negative, there is no intersection
-    if (discriminant < 0.0) {
-        t = -1;
-        return vec3(0.0);
-    }
-
-    // Calculate the intersection point(s) using the quadratic formula
-    float t1 = (-b - sqrt(discriminant)) / (2.0 * a);
-    float t2 = (-b + sqrt(discriminant)) / (2.0 * a);
-
-    // Choose the closest intersection point
-    t = min(t1, t2);
-
-    return origin + t * direction;
-}
-
 void main() {
-    vec3 UP = vec3(0,0,1);
 
     vec3 pos_a = loadVec3fromTex(0, id_a);
     vec3 pos_b = loadVec3fromTex(0, id_b);
@@ -165,29 +165,32 @@ void main() {
     vec3 radii_a = vec3(half_width_a, half_width_a, half_height_a);
     vec3 radii_b = vec3(half_width_b, half_width_b, half_height_b);
 
-    float line_t0 = 0;
-    vec3 center_0 = getNearestPointOnLineSegment(pos, pos_a, pos_b, line_t0);
-    vec3 radii_0 = mix(radii_a, radii_b, line_t0);
-    float ray_t0 = 0;
-    vec3 surface_point0 = intersectEllipsoid(pos - ray_dir, ray_dir, center_0, radii_0, ray_t0);
+    float lt;
+    vec3 center = getNearestPointOnLineSegment(pos, pos_a, pos_b, lt);
+    vec3 color = mix(color_a, color_b, lt);
+    vec3 radii = mix(radii_a, radii_b, lt);
+    vec3 c = calculateClosestPointOnEllipsoid(pos, center, radii);
 
-    float max_dist = line_len + half_width_a + half_width_b + half_height_a + half_height_b;
-    vec3 closest_on_line;
-    vec3 closest_on_ray;
-    nearestPointsOnLineSegments(pos_a, pos_b, pos, pos + ray_dir * max_dist, closest_on_line, closest_on_ray);
-    float line_t1 = dot(closest_on_line - pos_a, line) / dot(line,line);
-    vec3 radii_1 = mix(radii_a, radii_b, line_t1);
-    float ray_t1;
-    intersectEllipsoid(pos - ray_dir, ray_dir, mix(pos_a,pos_b,line_t1), radii_1, ray_t1);
-    if (ray_t1 < 0) discard;
+    float distance_to_center = length(c - center);
+    
+    float t1;
+    vec3 c2 = intersectCylinder(pos, ray_dir, pos_a, pos_b, 0.8*distance_to_center, t1);
+    c2 = 0.8*c2 + 0.2*c;
+    float lt2;
+    center = getNearestPointOnLineSegment(c2, pos_a, pos_b, lt2);
+    color = mix(color_a, color_b, lt2);
+    radii = mix(radii_a, radii_b, lt2);
 
-    float line_t = mix(line_t1, line_t0, abs(dot(ray_dir, line_dir)));
-    vec3 radii = mix(radii_a, radii_b, line_t);
-    vec3 center = mix(pos_a,pos_b,line_t);
-    vec3 color = mix(color_a, color_b, line_t);
-    float rt;
-    vec3 surface_point = intersectEllipsoid(pos - ray_dir, ray_dir, center, radii, rt);
-    vec3 normal = normalize(surface_point - center);
+    float t2;
+    vec3 surface_point = intersectEllipsoid(pos - ray_dir, ray_dir, center, radii, t2);
+    if (t2<0) discard;
+    // vec3 surface_point = c2;
+
+    vec3 cf =surface_point;// mix(surface_point, c, (max(length(c2 - c) - length(radii),0) / line_len));
+    vec3 cp = getNearestPointOnLineSegment(cf, pos_a, pos_b, lt2);
+
+    vec3 normal = normalize(cf - cp);
+
 
     vec3 lightColor = vec3(1.0, 1.0, 1.0); // Light color (white)
 
@@ -208,3 +211,33 @@ void main() {
     fragmentColor = vec4(diffuse, 1.0);
 
 }
+
+
+
+
+
+// float tl;
+    // vec3 center = getNearestPointOnLineSegment(pos, pos_a, pos_b, tl);
+    // vec3 radii = mix(radii_a, radii_b, tl);
+    // vec3 color = mix(color_a, color_b, tl);
+// 
+// 
+    // float t;
+    // vec3 surface_point = intersectEllipsoid(pos - line_len * ray_dir, ray_dir, center, radii, t);
+    // vec3 surface_closest = calculateClosestPointOnEllipsoid(surface_point, center, radii);
+    // vec3 depth_to_cross = surface_point - surface_closest;
+    // 
+    // float alfa = acos(dot(line_dir, ray_dir));
+    // float dist_to_cross = length(depth_to_cross) * tan(alfa);
+// 
+    // vec3 c = center + line_dir * dist_to_cross;
+    // float tl2 = dot(c - pos_a, line) / dot(line,line);
+    // tl2 = clamp(tl2, 0.0, 1.0);
+// 
+    // center = mix(pos_a,pos_b, tl2);
+    // radii = mix(radii_a, radii_b, tl2);
+    // color = mix(color_a, color_b, tl2);
+// 
+    // float t2;
+    // surface_point = intersectEllipsoid(pos -line_len * ray_dir, ray_dir, center, radii, t2);
+    // if (t2<0) discard;
