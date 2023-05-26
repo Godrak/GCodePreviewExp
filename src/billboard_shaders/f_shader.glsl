@@ -168,30 +168,40 @@ void main() {
     vec3 radii_a = vec3(half_width_a, half_width_a, half_height_a);
     vec3 radii_b = vec3(half_width_b, half_width_b, half_height_b);
 
-    float lt;
-    vec3 center = getNearestPointOnLineSegment(pos, pos_a, pos_b, lt);
-    vec3 color = mix(color_a, color_b, lt);
-    vec3 radii = mix(radii_a, radii_b, lt);
-    vec3 c = calculateClosestPointOnEllipsoid(pos, center, radii);
-
-    float distance_to_center = length(c - center);
+    // ################################
+    float limit = line_len + max(length(radii_a.xz), length(radii_b.xz));
     
-    float t1;
-    vec3 c2 = intersectCylinder(pos, ray_dir, pos_a, pos_b, 0.8*distance_to_center, t1);
-    float lt2;
-    center = getNearestPointOnLineSegment(c2, pos_a, pos_b, lt2);
-    color = mix(color_a, color_b, lt2);
-    radii = mix(radii_a, radii_b, lt2);
+    float traversed = 0;
+    vec3 surface_point = pos;
+    float lt;
+    vec3 last_center = getNearestPointOnLineSegment(surface_point, pos_a, pos_b, lt);
+    vec3 radii = mix(radii_a, radii_b, lt);
+    vec3 s = calculateClosestPointOnEllipsoid(surface_point, last_center, radii);
+    float last_depth = length(surface_point - s) * sign(dot(surface_point - s, s - last_center));
 
-    float t2;
-    vec3 surface_point = intersectEllipsoid(pos - ray_dir, ray_dir, center, radii, t2);
-    if (t2<0) discard;
-    // vec3 surface_point = c2;
+    while (traversed < limit && last_depth > 0) {
+        surface_point = surface_point + ray_dir *  limit/1000.0;
+        traversed += limit/1000.0;
 
-    vec3 cf =surface_point;// mix(surface_point, c, (max(length(c2 - c) - length(radii),0) / line_len));
-    vec3 cp = getNearestPointOnLineSegment(cf, pos_a, pos_b, lt2);
+        vec3 center = getNearestPointOnLineSegment(surface_point, pos_a, pos_b, lt);
+        // if (center == last_center) {
+        //     float t;
+        //     surface_point = intersectEllipsoid(pos - ray_dir, ray_dir, center, radii, t);
+        //     if (t<0) discard;
+        //     break;
+        // }
 
-    vec3 normal = normalize(cf - cp);
+        last_center = center;
+        radii = mix(radii_a, radii_b, lt);
+        s = calculateClosestPointOnEllipsoid(surface_point, center, radii);
+        float depth = length(surface_point - s) * sign(dot(surface_point - s, s - last_center));
+        if (depth > last_depth) discard;
+        last_depth = depth;
+    }
+    
+    vec3 color = mix(color_a, color_b, lt);
+
+    vec3 normal = normalize(surface_point - last_center);
 
 
     vec3 lightColor = vec3(1.0, 1.0, 1.0); // Light color (white)
