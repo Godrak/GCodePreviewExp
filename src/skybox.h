@@ -9,7 +9,13 @@
 #ifndef SKYBOX_H_
 #define SKYBOX_H_
 
+#include "globals.h"
+
+#if USE_GLAD
+#include <glad/glad.h>
+#else
 #include <epoxy/gl_generated.h>
+#endif // USE_GLAD
 #include <glm/glm.hpp>
 #include <vector>
 #include "misc/sky.c"
@@ -29,7 +35,7 @@ struct vertex {
 };
 
 std::vector<vertex> vertexData;
-std::vector<uint> indicesData;
+std::vector<uint8_t> indicesData;
 
 void prepareData() {
 	float size = 500;
@@ -46,7 +52,7 @@ void prepareData() {
 			{ { -size, size, -size } }
 	};
 
-	indicesData = std::vector<uint> {
+	indicesData = std::vector<uint8_t> {
 			// front
 			0, 1, 2,
 			2, 3, 0,
@@ -204,7 +210,7 @@ void init() {
 
 	glBufferData(GL_ARRAY_BUFFER, vertexData.size() * sizeof(vertex),
 			vertexData.data(), GL_STATIC_DRAW);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indicesData.size() * sizeof(uint),
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indicesData.size() * sizeof(uint8_t),
 			indicesData.data(), GL_STATIC_DRAW);
 
 // vertex attributes - position:

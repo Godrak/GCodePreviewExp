@@ -9,13 +9,18 @@
 #ifndef BILLBOARD_H_
 #define BILLBOARD_H_
 
+#include "globals.h"
+
+#if USE_GLAD
+#include <glad/glad.h>
+#else
 #include <epoxy/gl_generated.h>
-#include "glm/glm.hpp"
+#endif // USE_GLAD
+#include <glm/glm.hpp>
 #include <glm/fwd.hpp>
 #include <vector>
 #include <random>
 #include <iostream>
-#include "globals.h"
 
 namespace billboard {
 GLuint billboardVAO, vertexBuffer;
@@ -44,6 +49,8 @@ struct PathPoint
     glm::vec3 color;
     float height;
     float width;
+
+    static size_t size_in_bytes() { return 8; }
 };
 
 struct BufferedPath
@@ -73,7 +80,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     std::cout << "max size is: "<< maxTextureSize << std::endl;
 
     // Allocate memory for the texture
-    glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_R32F, 8, 31000, 0, GL_RED, GL_FLOAT, path_points.data());
+    glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_R32F, PathPoint::size_in_bytes(), std::min<GLsizei>(path_points.size(), maxTextureSize), 0, GL_RED, GL_FLOAT, path_points.data());
     checkGl();
 
     // Bind the texture to an image unit

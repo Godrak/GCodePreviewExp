@@ -44,7 +44,7 @@ void moveCamera(char c) {
 	case 'q':
 		camera::position += glm::normalize(up) * stepSize;
 		break;
-	case 'e':
+	case 'z':
 		camera::position -= glm::normalize(up) * stepSize;
 		break;
 	default:

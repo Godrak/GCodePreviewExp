@@ -1,7 +1,13 @@
 #ifndef GLOBALS_H_
 #define GLOBALS_H_
 
+#define USE_GLAD 1
+#if USE_GLAD
+#include <glad/glad.h>
+#endif // USE_GLAD
+
 #include <glm/glm.hpp>
+#include <iostream>
 
 namespace globals {
 

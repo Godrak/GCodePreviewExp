@@ -1,7 +1,12 @@
+#include "globals.h"
 
-#include "epoxy/gl.h"
-#include <GLFW/glfw3.h>
+#if USE_GLAD
+#include <glad/glad.h>
+#else
+#include <epoxy/gl.h>
 #include <epoxy/gl_generated.h>
+#endif // USE_GLAD
+#include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -13,7 +18,6 @@
 
 #define DEBUG
 
-#include "globals.h"
 #include "camera.h"
 #include "shaders.h"
 #include "skybox.h"
@@ -64,6 +68,7 @@ int vsync = 1;
 char forth_back = ' ';
 char left_right = ' ';
 char up_down = ' ';
+char top_view = ' ';
 
 static void error_callback(int error, const char *description) {
 	std::cout << "Error: " << description << std::endl;
@@ -111,14 +116,19 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 			up_down = ('q');
 			break;
 
-		case GLFW_KEY_E:
-			up_down = ('e');
+		case GLFW_KEY_Z:
+			up_down = ('z');
 			break;
+
+		case GLFW_KEY_T:
+			top_view = ('t');
+			break;
+
 		case GLFW_KEY_KP_ADD:
-			camera::stepSize += 2 / 60.0f;
+			camera::stepSize *= 2.0f;
 			break;
 		case GLFW_KEY_KP_SUBTRACT:
-			camera::stepSize -= 2 / 60.0f;
+			camera::stepSize *= 0.5f;
 			break;
 		}
 	}
@@ -134,8 +144,11 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 			left_right = ' ';
 			break;
 		case GLFW_KEY_Q:
-		case GLFW_KEY_E:
+		case GLFW_KEY_Z:
 			up_down = ' ';
+			break;
+		case GLFW_KEY_T:
+			top_view = 't';
 			break;
 		}
 	}
@@ -161,6 +174,7 @@ static void initGlfw() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_MAXIMIZED, 1);
 
 	window = glfwCreateWindow(globals::screenResolution.x, globals::screenResolution.y, "ProjectZero", NULL, NULL);
 	if (!window)
@@ -171,6 +185,13 @@ static void initGlfw() {
 	glfwSetCursorPosCallback(window, cursor_position_callback);
 
 	glfwMakeContextCurrent(window);
+
+#if USE_GLAD
+	const int version = gladLoadGL();
+	if (version == 0)
+		printf("Failed to initialize OpenGL context\n");
+#endif // USE_GLAD
+
 	glfwSwapInterval(vsync);
 
 }
@@ -202,6 +223,7 @@ void render(const billboard::BufferedPath& path) {
 	camera::moveCamera(glfwContext::forth_back);checkGl();
 	camera::moveCamera(glfwContext::up_down);checkGl();
 	camera::moveCamera(glfwContext::left_right);checkGl();
+	camera::moveCamera(glfwContext::top_view); checkGl();
 
 	if (config::updateCameraPosition)
 		lastCameraPosition = camera::position;

@@ -1,11 +1,15 @@
 #ifndef SHADERS_H_
 #define SHADERS_H_
 
+#include "globals.h"
+
+#if USE_GLAD
+#include <glad/glad.h>
+#else
 #include <epoxy/gl.h>
+#endif // USE_GLAD
 #include <iostream>
 #include <string>
-
-#include "globals.h"
 
 namespace shaderProgram {
 GLuint skybox_v_shader, skybox_f_shader, skybox_program;
@@ -59,10 +63,17 @@ void loadAndCompileShader(std::string source, GLuint& destination, GLenum type) 
 		exit(-1);
 }
 
+#define USE_HARDCODED_PATHS 1
+#if USE_HARDCODED_PATHS
+static const std::string shaders_path = "C:/prusa/references/GCodePreviewExp/win_glad/bin/";
+#else
+static const std::string shaders_path = "";
+#endif // USE_HARDCODED_PATHS
+
 void createSkyboxProgram() {
-	loadAndCompileShader("skybox_shaders/v_shader.glsl", skybox_v_shader,
+	loadAndCompileShader(shaders_path + "skybox_shaders/v_shader.glsl", skybox_v_shader,
 	GL_VERTEX_SHADER);
-	loadAndCompileShader("skybox_shaders/f_shader.glsl", skybox_f_shader,
+	loadAndCompileShader(shaders_path + "skybox_shaders/f_shader.glsl", skybox_f_shader,
 	GL_FRAGMENT_SHADER);
 
 	skybox_program = glCreateProgram();
@@ -74,9 +85,9 @@ void createSkyboxProgram() {
 }
 
 void createBillboardProgram() {
-	loadAndCompileShader("billboard_shaders/v_shader.glsl", billboard_v_shader,
+	loadAndCompileShader(shaders_path + "billboard_shaders/v_shader.glsl", billboard_v_shader,
 	GL_VERTEX_SHADER);
-	loadAndCompileShader("billboard_shaders/f_shader.glsl", billboard_f_shader,
+	loadAndCompileShader(shaders_path + "billboard_shaders/f_shader.glsl", billboard_f_shader,
 	GL_FRAGMENT_SHADER);
 
 	billboard_program = glCreateProgram();
