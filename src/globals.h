@@ -15,6 +15,7 @@ GLint screen_size_location = 2;
 namespace config {
 bool updateCameraPosition = true;
 bool geometryMode = false;
+float percentage_to_show = 1.0;
 }
 
 static bool check_opengl() {

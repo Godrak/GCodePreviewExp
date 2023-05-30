@@ -31,6 +31,14 @@ void main() {
     vec3 pos_a = loadVec3fromTex(0, id_a);
     vec3 pos_b = loadVec3fromTex(0, id_b);
 
+    float width_a = texelFetch(pathTexture, ivec2(7, id_a)).x;
+    float width_b = texelFetch(pathTexture, ivec2(7, id_b)).x;
+    if (width_a < 0 || width_b < 0) {
+        gl_Position = view_projection * vec4(vec3(0), 1.0);
+        return;
+    }
+
+
 	vec3 line = pos_b - pos_a;
     vec3 view_a = pos_a - camera_position;
     vec3 view_b = pos_b - camera_position;

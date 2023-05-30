@@ -84,7 +84,12 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 			glfwSwapInterval(vsync);
 			break;
 		case GLFW_KEY_R:
-			config::updateCameraPosition = 1 - config::updateCameraPosition;
+			config::percentage_to_show += 0.01;
+			config::percentage_to_show = fmin(1.0f, config::percentage_to_show);
+			break;
+		case GLFW_KEY_F:
+			config::percentage_to_show -= 0.01;
+			config::percentage_to_show = fmax(0.0f, config::percentage_to_show);
 			break;
 		case GLFW_KEY_W:
 			forth_back = ('w');
@@ -243,7 +248,7 @@ void render(const billboard::BufferedPath& path) {
     glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
     glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
     checkGl();
-    glDrawArraysInstanced(GL_TRIANGLES, 0, billboard::vertexData.size(), path.point_count-1);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, billboard::vertexData.size(), std::max(size_t(2),size_t((path.point_count-1) * config::percentage_to_show)));
     checkGl();
 
     glUseProgram(0);
@@ -267,14 +272,57 @@ void setup() {
 
 }
 
-int main() {
+// Reader function to load vector of PathPoints from a file
+std::vector<billboard::PathPoint> readPathPoints(const std::string& filename)
+{
+    std::vector<billboard::PathPoint> pathPoints;
+
+    std::ifstream file(filename, std::ios::binary);
+    if (!file)
+    {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return pathPoints;
+    }
+
+    // Read the size of the vector
+    size_t size;
+    file.read(reinterpret_cast<char*>(&size), sizeof(size));
+	std::cout << "SIZE IS: " << size << std::endl;
+    pathPoints.resize(size);
+
+    // Read each PathPoint object from the file
+    for (auto& point : pathPoints)
+    {
+        file.read(reinterpret_cast<char*>(&point), sizeof(point));
+    }
+
+    file.close();
+
+    return pathPoints;
+}
+
+int main(int argc, char* argv[]) {
+    // Check if a filename argument is provided
+    if (argc < 2) {
+        std::cout << "Please provide a filename as an argument." << std::endl;
+        return 1;
+    }
+
+    // Read the filename from argv[1]
+    std::string filename = argv[1];
+
+	auto points = readPathPoints(filename);
+
 	glfwContext::initGlfw();
 	rendering::lastTime = float(glfwGetTime());
 	rendering::currentTime = float(glfwGetTime());
 
 	rendering::setup();
 
-	billboard::BufferedPath path = billboard::generateTestingPathPoints();
+	// billboard::BufferedPath path = billboard::generateTestingPathPoints();
+	billboard::BufferedPath path = billboard::bufferExtrusionPaths(points);
+
+	std::cout << "PATHS BUFFERED" << std::endl;
 
 	fps::fps_start();
 	while (!glfwWindowShouldClose(glfwContext::window)) {

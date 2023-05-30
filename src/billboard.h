@@ -52,6 +52,40 @@ struct BufferedPath
     size_t point_count;
 };
 
+BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
+    BufferedPath result;
+    result.point_count = path_points.size(); 
+
+    glBindVertexArray(billboardVAO);
+
+    // Create and bind the texture
+    glGenTextures(1, &result.pathTexture); checkGl();
+    glBindTexture(GL_TEXTURE_RECTANGLE, result.pathTexture); checkGl();
+
+    // Set texture parameters
+    glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MIN_FILTER, GL_NEAREST); checkGl();
+    glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MAG_FILTER, GL_NEAREST); checkGl();
+
+    std::cout << " size " << path_points.size() <<  std::endl;
+
+    int maxTextureSize;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
+    std::cout << "max size is: "<< maxTextureSize << std::endl;
+
+    // Allocate memory for the texture
+    glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_R32F, 8, 31000, 0, GL_RED, GL_FLOAT, path_points.data());
+    checkGl();
+
+    // Bind the texture to an image unit
+    glBindImageTexture(0, result.pathTexture, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32F); checkGl();
+
+    // Unbind the texture
+    glBindTexture(GL_TEXTURE_RECTANGLE, 0); checkGl();
+    glBindVertexArray(0);
+
+    return result;
+}
+
 BufferedPath generateTestingPathPoints()
 {
     std::vector<PathPoint>                pathPoints;
@@ -71,31 +105,7 @@ BufferedPath generateTestingPathPoints()
         pathPoints.push_back(point);
     }
 
-    BufferedPath result;
-    result.point_count = pathPoints.size(); 
-
-    glBindVertexArray(billboardVAO);
-
-    // Create and bind the texture
-    glGenTextures(1, &result.pathTexture); checkGl();
-    glBindTexture(GL_TEXTURE_RECTANGLE, result.pathTexture); checkGl();
-
-    // Set texture parameters
-    glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MIN_FILTER, GL_NEAREST); checkGl();
-    glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MAG_FILTER, GL_NEAREST); checkGl();
-
-    // Allocate memory for the texture
-    glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_R32F, 8, pathPoints.size(), 0, GL_RED, GL_FLOAT, pathPoints.data());
-    checkGl();
-
-    // Bind the texture to an image unit
-    glBindImageTexture(0, result.pathTexture, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32F); checkGl();
-
-    // Unbind the texture
-    glBindTexture(GL_TEXTURE_RECTANGLE, 0); checkGl();
-    glBindVertexArray(0);
-
-    return result;
+   return bufferExtrusionPaths(pathPoints);
 }
 
 void init()
