@@ -1,11 +1,9 @@
 #include "globals.h"
 
-#if USE_GLAD
-#include <glad/glad.h>
-#else
+#if !USE_GLAD
 #include <epoxy/gl.h>
 #include <epoxy/gl_generated.h>
-#endif // USE_GLAD
+#endif // !USE_GLAD
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>

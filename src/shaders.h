@@ -3,11 +3,9 @@
 
 #include "globals.h"
 
-#if USE_GLAD
-#include <glad/glad.h>
-#else
+#if !USE_GLAD
 #include <epoxy/gl.h>
-#endif // USE_GLAD
+#endif // !USE_GLAD
 #include <iostream>
 #include <string>
 
