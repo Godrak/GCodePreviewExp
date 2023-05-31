@@ -8,22 +8,38 @@
 layout(location = 0) uniform mat4 view_projection;
 layout(location = 1) uniform vec3 camera_position;
 
-layout(binding = 1) uniform sampler2DRect pathTexture;
+vec3 colors[8];
+void initializeColors() {
+    colors[0] = vec3(1.0, 0.5, 0.0);
+    colors[1] = vec3(1.0, 1.0, 0.0);
+    colors[2] = vec3(0.0, 0.0, 1.0);
+    colors[3] = vec3(0.0, 1.0, 1.0);
+    colors[4] = vec3(1.0, 0.0, 0.0);
+    colors[5] = vec3(1.0, 1.0, 1.0);
+    colors[6] = vec3(1.0, 0.0, 1.0);
+    colors[7] = vec3(0.0, 1.0, 0.0);
+}
+
+// Struct definition for PathPoint
+struct PathPoint {
+    vec2 pos_xy;
+    float pos_z;
+    int type;
+    float height;
+    float width;
+};
+
+// Binding point for the path data SSBO
+layout(std430, binding = 0) buffer PathBuffer {
+    PathPoint points[];
+};
+
 
 out vec4 fragmentColor;
 
 in flat int id_a;
 in flat int id_b;
 in vec3 pos;
-
-vec3 loadVec3fromTex(int offset, int pos) {
-    vec3 result;
-    result.x = texelFetch(pathTexture, ivec2(offset+0, pos)).x;
-    result.y = texelFetch(pathTexture, ivec2(offset+1, pos)).x;
-    result.z = texelFetch(pathTexture, ivec2(offset+2, pos)).x;
-
-    return result;
-} 
 
 // Function to get the nearest point on a line segment
 vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 ab, out float t) {
@@ -49,13 +65,15 @@ vec3 calculateClosestPointOnEllipsoid(vec3 point, vec3 ellipsoidCenter, vec3 ell
 }
 
 void main() {
+    initializeColors();
+    
+    vec3 pos_a = vec3(points[id_a].pos_xy, points[id_a].pos_z);
+    vec3 pos_b = vec3(points[id_b].pos_xy, points[id_b].pos_z);
 
-    vec3 pos_a = loadVec3fromTex(0, id_a);
-    vec3 pos_b = loadVec3fromTex(0, id_b);
-    float half_height_a = 0.5* texelFetch(pathTexture, ivec2(6, id_a)).x;
-    float half_width_a = 0.5*texelFetch(pathTexture, ivec2(7, id_a)).x;
-    float half_height_b = 0.5* texelFetch(pathTexture, ivec2(6, id_b)).x;
-    float half_width_b = 0.5*texelFetch(pathTexture, ivec2(7, id_b)).x;
+    float half_height_a = 0.5* points[id_a].height;
+    float half_width_a = 0.5 * points[id_a].width;
+    float half_height_b = 0.5 * points[id_b].height;
+    float half_width_b = 0.5 * points[id_b].width;
 
     vec3 radii_a = vec3(half_width_a, half_width_a, half_height_a);
     vec3 radii_b = vec3(half_width_b, half_width_b, half_height_b);
@@ -67,8 +85,8 @@ void main() {
     vec3 line = pos_b-pos_a;
     vec3 line_dir = (pos_a-pos_b) / line_len; 
 
-    vec3 color_a = loadVec3fromTex(3, id_a);
-    vec3 color_b = loadVec3fromTex(3, id_b);
+    vec3 color_a = colors[points[id_a].type];
+    vec3 color_b = colors[points[id_b].type];
     // ################################
     float limit = line_len;
     

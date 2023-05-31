@@ -5,7 +5,7 @@
 
 namespace globals {
 
-glm::ivec2 screenResolution = {1600,830};
+glm::ivec2 screenResolution = {1500,830};
 
 GLint vp_location = 0;
 GLint camera_position_location = 1;
