@@ -1,7 +1,7 @@
 
 #include "epoxy/gl.h"
-#include <GLFW/glfw3.h>
 #include <epoxy/gl_generated.h>
+#include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -226,7 +226,6 @@ void render(const billboard::BufferedPath& path) {
 
 	glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));checkGl();
 	glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));checkGl();
-	glUniform2iv(globals::screen_size_location, 1, glm::value_ptr(globals::screenResolution));checkGl();
 
 	glDrawElements(GL_TRIANGLES, skybox::indicesData.size(), GL_UNSIGNED_INT, 0);checkGl();
 
