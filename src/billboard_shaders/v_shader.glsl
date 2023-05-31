@@ -24,6 +24,12 @@ out flat int id_a;
 out flat int id_b;
 out vec3 pos;
 
+
+float signDotABminusDotAC(vec3 A, vec3 B, vec3 C){
+    // sign(dot(A, B) - dot(A, C)) = sign((B.x - C.x) * A.x + (B.y - C.y) * A.y + (B.z - C.z) * A.z)
+    return sign((B.x - C.x) * A.x + (B.y - C.y) * A.y + (B.z - C.z) * A.z);
+}
+
 void main() {
     vec3 UP = vec3(0,0,1);
 
@@ -46,11 +52,19 @@ void main() {
 
     //camera space
     vec3 camera_view_dir = 0.5*(pos_a + pos_b) - camera_position;
-    vec3 camera_right_dir = normalize(cross(camera_view_dir, UP));
-    vec3 camera_up_dir = normalize(cross(camera_right_dir, camera_view_dir));
+    // NOTE: camera dirs are now used only for determining which box size is closer to the camera and should be rendered
+    // As such, they do not need normalization for now
+    vec3 camera_right_dir_nn = (cross(camera_view_dir, UP));
+    vec3 camera_up_dir_nn = (cross(camera_right_dir_nn, camera_view_dir));
 
     // directions of the line box in world space
-    vec3 line_dir = normalize(line);
+    float line_len = length(line);
+    vec3 line_dir;
+    if (line_len < 1e-4) {
+        line_dir = vec3(1.0,0.0,0.0);
+    }else {
+        line_dir = line / line_len;
+    }
     vec3 right_dir = normalize(cross(line_dir, UP));
     vec3 up_dir = normalize(cross(right_dir, line_dir));
 
@@ -83,11 +97,10 @@ void main() {
     float cap_sign = vertex_id < 4 ? -1.0 : 1.0;
     vec3 cap = (half_width - 0.001) * line_dir * dir_sign * cap_sign;
 
-    vec3 horizontal_dir = half_width * right_dir * sign(dot(view_b, camera_right_dir) - dot(view_a, camera_right_dir));
-    vec3 vertical_dir = half_height * up_dir * dir_sign * sign(dot(view_b, camera_up_dir) - dot(view_a, camera_up_dir));
+    vec3 horizontal_dir = half_width * right_dir * signDotABminusDotAC(camera_right_dir_nn, view_b, view_a);
+    vec3 vertical_dir = half_height * up_dir * dir_sign * signDotABminusDotAC(camera_up_dir_nn, view_b, view_a);
 
-    vec3 vertex_position = vec3(points[id_final].pos_xy,points[id_final].pos_z)  + cap + hsign * horizontal_dir + vsign * vertical_dir;
-    pos = vertex_position;
-    gl_Position = view_projection * vec4(vertex_position, 1.0);
+    pos = vec3(points[id_final].pos_xy,points[id_final].pos_z)  + cap + hsign * horizontal_dir + vsign * vertical_dir;
+    gl_Position = view_projection * vec4(pos, 1.0);
 }
 

@@ -66,6 +66,7 @@ vec3 calculateClosestPointOnEllipsoid(vec3 point, vec3 ellipsoidCenter, vec3 ell
 
 void main() {
     initializeColors();
+    // fragmentColor = vec4(colors[points[id_a].type], 1.0); return;
     
     vec3 pos_a = vec3(points[id_a].pos_xy, points[id_a].pos_z);
     vec3 pos_b = vec3(points[id_b].pos_xy, points[id_b].pos_z);
