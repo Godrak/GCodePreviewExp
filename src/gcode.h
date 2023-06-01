@@ -1,13 +1,13 @@
 /*
- * billboard.h
+ * gcode.h
  *
  *  Created on: Jun 9, 2019
  *      Author: Pavel Mikus
  *		mail: pavel.mikus@eyen.se
  */
 
-#ifndef BILLBOARD_H_
-#define BILLBOARD_H_
+#ifndef GCODE_H_
+#define GCODE_H_
 
 #include <cstddef>
 #include <epoxy/gl_generated.h>
@@ -18,8 +18,8 @@
 #include <iostream>
 #include "globals.h"
 
-namespace billboard {
-GLuint billboardVAO, vertexBuffer;
+namespace gcode {
+GLuint gcodeVAO, vertexBuffer;
 GLuint visiblityFrameBuffer, instanceIdsTexture, depthTexture;
 
 GLuint pathSSBObindPoint = 5;
@@ -60,7 +60,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     BufferedPath result;
     result.point_count = path_points.size(); 
 
-    glBindVertexArray(billboardVAO);
+    glBindVertexArray(gcodeVAO);
 
     // Create and bind the SSBO
     glGenBuffers(1, &result.path_buffer); checkGl();
@@ -120,8 +120,8 @@ BufferedPath generateTestingPathPoints()
 
 void init()
 {
-    glGenVertexArrays(1, &billboardVAO);
-    glBindVertexArray(billboardVAO);
+    glGenVertexArrays(1, &gcodeVAO);
+    glBindVertexArray(gcodeVAO);
 
     glGenBuffers(1, &vertexBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
@@ -163,6 +163,6 @@ void init()
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-} // namespace billboard
+} // namespace gcode
 
-#endif /* BILLBOARD_H_ */
+#endif /* GCODE_H_ */

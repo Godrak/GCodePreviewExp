@@ -16,7 +16,7 @@
 #include "globals.h"
 #include "camera.h"
 #include "shaders.h"
-#include "billboard.h"
+#include "gcode.h"
 
 namespace fps {
 static double fpsOrigin = 0.0;
@@ -190,7 +190,7 @@ void switchConfiguration() {
 	}
 }
 
-void render(const billboard::BufferedPath& path) {
+void render(const gcode::BufferedPath& path) {
 	currentTime = float(glfwGetTime());checkGl();
 	auto delta = currentTime - lastTime;
 	lastTime = currentTime;
@@ -209,16 +209,16 @@ void render(const billboard::BufferedPath& path) {
 	camera::applyViewTransform(view_projection);
 	camera::applyProjectionTransform(view_projection);
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glEnable(GL_DEPTH_TEST);
+
+
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);checkGl();
+	glEnable(GL_DEPTH_TEST);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);checkGl();
 	glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);checkGl();
 
-	// BILLBOARDED EXTRUSION PATHS
-    glBindVertexArray(billboard::billboardVAO);
-    glUseProgram(shaderProgram::billboard_program);
+    glBindVertexArray(gcode::gcodeVAO);
+    glUseProgram(shaderProgram::gcode_program);
     checkGl();
 
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, path.path_buffer); // Bind the SSBO to the indexed buffer binding point 0
@@ -226,7 +226,7 @@ void render(const billboard::BufferedPath& path) {
     glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
     glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
     checkGl();
-    glDrawArraysInstanced(GL_TRIANGLES, 0, billboard::vertexData.size(), std::max(size_t(2),size_t((path.point_count-1) * config::percentage_to_show)));
+    glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertexData.size(), std::max(size_t(2),size_t((path.point_count-1) * config::percentage_to_show)));
     checkGl();
 
     glUseProgram(0);
@@ -240,8 +240,8 @@ void render(const billboard::BufferedPath& path) {
 }
 
 void setup() {
-	shaderProgram::createBillboardProgram();
-	billboard::init();
+	shaderProgram::creategcodeProgram();
+	gcode::init();
 	glClearColor(0.0,0.0,0.6,0.0);
 	checkGl();
 }
@@ -249,9 +249,9 @@ void setup() {
 }
 
 // Reader function to load vector of PathPoints from a file
-std::vector<billboard::PathPoint> readPathPoints(const std::string& filename)
+std::vector<gcode::PathPoint> readPathPoints(const std::string& filename)
 {
-    std::vector<billboard::PathPoint> pathPoints;
+    std::vector<gcode::PathPoint> pathPoints;
 
     std::ifstream file(filename, std::ios::binary);
     if (!file)
@@ -295,8 +295,8 @@ int main(int argc, char* argv[]) {
 
 	rendering::setup();
 
-	// billboard::BufferedPath path = billboard::generateTestingPathPoints();
-	billboard::BufferedPath path = billboard::bufferExtrusionPaths(points);
+	// gcode::BufferedPath path = gcode::generateTestingPathPoints();
+	gcode::BufferedPath path = gcode::bufferExtrusionPaths(points);
 
 	std::cout << "PATHS BUFFERED" << std::endl;
 

@@ -8,9 +8,7 @@
 #include "globals.h"
 
 namespace shaderProgram {
-GLuint skybox_v_shader, skybox_f_shader, skybox_program;
-
-GLuint billboard_v_shader, billboard_f_shader, billboard_program;
+GLuint gcode_v_shader, gcode_f_shader, gcode_program;
 
 bool check_shader(std::string source, GLuint id, GLenum st) {
 	GLint logLength;
@@ -59,17 +57,17 @@ void loadAndCompileShader(std::string source, GLuint& destination, GLenum type) 
 		exit(-1);
 }
 
-void createBillboardProgram() {
-	loadAndCompileShader("billboard_shaders/v_shader.glsl", billboard_v_shader,
+void creategcodeProgram() {
+	loadAndCompileShader("gcode_shaders/v_shader.glsl", gcode_v_shader,
 	GL_VERTEX_SHADER);
-	loadAndCompileShader("billboard_shaders/f_shader.glsl", billboard_f_shader,
+	loadAndCompileShader("gcode_shaders/f_shader.glsl", gcode_f_shader,
 	GL_FRAGMENT_SHADER);
 
-	billboard_program = glCreateProgram();
-	glAttachShader(billboard_program, billboard_v_shader);
-	glAttachShader(billboard_program, billboard_f_shader);
-	glLinkProgram(billboard_program);
-	if (!check_program(billboard_program, GL_LINK_STATUS))
+	gcode_program = glCreateProgram();
+	glAttachShader(gcode_program, gcode_v_shader);
+	glAttachShader(gcode_program, gcode_f_shader);
+	glLinkProgram(gcode_program);
+	if (!check_program(gcode_program, GL_LINK_STATUS))
 		exit(-1);
 }
 
