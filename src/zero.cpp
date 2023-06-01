@@ -283,7 +283,7 @@ void render(const gcode::BufferedPath& path) {
 
     glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
     glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
-    glUniform1i(globals::visibility_pass_location, true);
+    glUniform1i(globals::visibility_pass_location, false);
     checkGl();
     glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size,
                           std::max(size_t(2), size_t((path.point_count - 1) * config::percentage_to_show)));

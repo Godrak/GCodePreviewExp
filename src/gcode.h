@@ -21,7 +21,7 @@
 namespace gcode {
 GLuint gcodeVAO, vertexBuffer;
 GLuint visibilityFrameBuffer, instanceIdsTexture, depthTexture;
-GLuint quadVAO, quadVertexBuffer;
+GLuint quadVAO;
 
 GLuint pathSSBObindPoint = 5;
 
@@ -36,16 +36,6 @@ int vertex_data[] = {
         0, 5, 6, // top side of box 
         0, 6, 1 };
 
-size_t quad_vertices_size = 12;
-float quad_vertices[] = {
-    -1.0f, -1.0f,  // Vertex 1
-     1.0f, -1.0f,  // Vertex 2
-     1.0f,  1.0f,  // Vertex 3
-
-    -1.0f, -1.0f,  // Vertex 1 (repeated)
-     1.0f,  1.0f,  // Vertex 3 (repeated)
-    -1.0f,  1.0f   // Vertex 4
-};
 //https://stackoverflow.com/questions/38172696/should-i-ever-use-a-vec3-inside-of-a-uniform-buffer-or-shader-storage-buffer-o
 struct PathPoint
 {
@@ -149,7 +139,7 @@ void init()
 	glActiveTexture(GL_TEXTURE1);
     glGenTextures(1, &instanceIdsTexture);
     glBindTexture(GL_TEXTURE_2D, instanceIdsTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32I, globals::visibilityResolution.x ,globals::visibilityResolution.y, 0, GL_RGBA_INTEGER, GL_INT, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32I, globals::visibilityResolution.x, globals::visibilityResolution.y, 0, GL_RED_INTEGER, GL_INT, nullptr);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, instanceIdsTexture, 0);
 
 	checkGl();
@@ -167,19 +157,8 @@ void init()
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-
     glGenVertexArrays(1, &quadVAO);
     glBindVertexArray(quadVAO);
-
-    glGenBuffers(1, &quadVertexBuffer);
-    glBindBuffer(GL_ARRAY_BUFFER, quadVertexBuffer);
-
-    checkGl();
-
-    glBufferData(GL_ARRAY_BUFFER, quad_vertices_size * sizeof(float), quad_vertices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(1);
 
     checkGl();
 
