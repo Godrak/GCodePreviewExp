@@ -43,7 +43,10 @@ void main() {
     id_a = int(gl_InstanceID);
     id_b = int(gl_InstanceID) + 1;
 
-    if (visibility_pass == 0 || (visible_ids[id_a] == 0 && visible_ids[id_b] == 0)) {
+    // if not visilibty pass and neither of line endpoints visible, throw away. 
+    // (While it may seem confusing, it actually checks visibility of any point of the line, 
+    // since we set endpoint A to visible for any fragment that makes to the visiblity framebuffer)
+    if (visibility_pass == 0 && visible_ids[id_a] == 0 && visible_ids[id_b] == 0) {
         gl_Position = vec4(0);
         return;
     }

@@ -26,19 +26,22 @@ GLuint pathSSBObindPoint = 5;
 
 GLint vid_loc = 0;
 
-std::vector<int> vertexData;
-
-void prepareData()
-{
-    vertexData = std::vector<int>{
+size_t vertex_data_size = 18;
+int vertex_data[] = {  
         0, 1, 2,  // left side of box (for common depiction of a box, where left, right and top sides are visible)
         0, 2, 3,
         0, 3, 4,  // right side of box    
         0, 4, 5, 
         0, 5, 6, // top side of box 
-        0, 6, 1 
-        };
-}
+        0, 6, 1 };
+
+size_t quad_vertices_size = 16;
+float quad_vertices[] = {
+    -1.0f, -1.0f, 0.0f, 0.0f,
+     1.0f, -1.0f, 1.0f, 0.0f,
+     1.0f,  1.0f, 1.0f, 1.0f,
+    -1.0f,  1.0f, 0.0f, 1.0f
+};
 
 //https://stackoverflow.com/questions/38172696/should-i-ever-use-a-vec3-inside-of-a-uniform-buffer-or-shader-storage-buffer-o
 struct PathPoint
@@ -127,9 +130,8 @@ void init()
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
 
     checkGl();
-    prepareData();
 
-    glBufferData(GL_ARRAY_BUFFER, vertexData.size() * sizeof(int), vertexData.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vertex_data_size * sizeof(int), vertex_data, GL_STATIC_DRAW);
 
     // vertex attributes - id:
     glEnableVertexAttribArray(vid_loc);
