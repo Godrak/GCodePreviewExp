@@ -103,8 +103,10 @@ void main() {
     float hsign = (vertex_id == 1 || vertex_id == 2 || vertex_id == 6) ? -1.0 : 1.0;
     float vsign = (vertex_id == 2 || vertex_id == 3 || vertex_id == 4) ? -1.0 : 1.0;
 
-    float half_height = 0.5 * points[id_final].height;
-    float half_width = 0.5 * points[id_final].width;
+    // for visiblity pass, make the lines smaller, so that there are no holes in the result.
+    float h = (visibility_pass == 1) ? 0.4 : 0.5;
+    float half_height = h * points[id_final].height;
+    float half_width = h * points[id_final].width;
 
     // extend beyond the path points by half width - It allows for seamless connections, 
     // also it better represents the reality (with the caps rounded in frag shader)
