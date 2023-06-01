@@ -1,13 +1,12 @@
 #version 450
 
-
-out int instanceID;
+out int visible_instance_id;
 
 in flat int id_a;
 in flat int id_b;
 in vec3 pos;
 
 void main() {
-   instanceID = id_a;
+   visible_instance_id = id_a;
 }
 

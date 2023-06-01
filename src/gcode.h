@@ -140,6 +140,8 @@ void init()
     glGenTextures(1, &instanceIdsTexture);
     glBindTexture(GL_TEXTURE_2D, instanceIdsTexture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R32I, globals::visibilityResolution.x, globals::visibilityResolution.y, 0, GL_RED_INTEGER, GL_INT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, instanceIdsTexture, 0);
 
 	checkGl();
@@ -153,7 +155,7 @@ void init()
 
 	checkGl();
 	checkGLCall(glCheckNamedFramebufferStatus(visibilityFrameBuffer, GL_FRAMEBUFFER));
-    //OpenGL message: 36053 means that the framebuffer does not allow multisampling. Which makes sense, it is full of integers
+    //OpenGL message: 36053 means that the framebuffer is complete
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 

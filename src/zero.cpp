@@ -224,9 +224,8 @@ void render(const gcode::BufferedPath& path) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     checkGl();
     glViewport(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y);
-    checkGl();
 
-    // expcet for the different resolution and shader program, this render pass is same as the final GCode render.
+    // except for the different resolution and shader program, this render pass is same as the final GCode render.
     // what happens here is that all boxes of all lines are rendered, but only the visible ones will have their ids written into the framebuffer
     glBindVertexArray(gcode::gcodeVAO);
     glUseProgram(shaderProgram::visibility_program);
@@ -255,6 +254,8 @@ void render(const gcode::BufferedPath& path) {
 
 	glActiveTexture(GL_TEXTURE1);    
 	glBindTexture(GL_TEXTURE_2D, gcode::instanceIdsTexture);
+	glBindImageTexture(1 /*UNIT*/, gcode::instanceIdsTexture, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32I);
+	
 	checkGl();
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
