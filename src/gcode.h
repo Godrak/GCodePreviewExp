@@ -21,6 +21,7 @@
 namespace gcode {
 GLuint gcodeVAO, vertexBuffer;
 GLuint visibilityFrameBuffer, instanceIdsTexture, depthTexture;
+GLuint quadVAO, quadVertexBuffer;
 
 GLuint pathSSBObindPoint = 5;
 
@@ -35,14 +36,16 @@ int vertex_data[] = {
         0, 5, 6, // top side of box 
         0, 6, 1 };
 
-size_t quad_vertices_size = 16;
+size_t quad_vertices_size = 12;
 float quad_vertices[] = {
-    -1.0f, -1.0f, 0.0f, 0.0f,
-     1.0f, -1.0f, 1.0f, 0.0f,
-     1.0f,  1.0f, 1.0f, 1.0f,
-    -1.0f,  1.0f, 0.0f, 1.0f
-};
+    -1.0f, -1.0f,  // Vertex 1
+     1.0f, -1.0f,  // Vertex 2
+     1.0f,  1.0f,  // Vertex 3
 
+    -1.0f, -1.0f,  // Vertex 1 (repeated)
+     1.0f,  1.0f,  // Vertex 3 (repeated)
+    -1.0f,  1.0f   // Vertex 4
+};
 //https://stackoverflow.com/questions/38172696/should-i-ever-use-a-vec3-inside-of-a-uniform-buffer-or-shader-storage-buffer-o
 struct PathPoint
 {
@@ -163,6 +166,24 @@ void init()
     //OpenGL message: 36053 means that the framebuffer does not allow multisampling. Which makes sense, it is full of integers
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+    glGenVertexArrays(1, &quadVAO);
+    glBindVertexArray(quadVAO);
+
+    glGenBuffers(1, &quadVertexBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, quadVertexBuffer);
+
+    checkGl();
+
+    glBufferData(GL_ARRAY_BUFFER, quad_vertices_size * sizeof(float), quad_vertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
+
+    checkGl();
+
+    glBindVertexArray(0);
 }
 
 } // namespace gcode

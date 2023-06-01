@@ -12,6 +12,8 @@ GLuint gcode_v_shader, gcode_f_shader, gcode_program;
 
 GLuint visibility_v_shader, visibility_f_shader, visibility_program;
 
+GLuint quad_v_shader, quad_f_shader, quad_program;
+
 bool check_shader(std::string source, GLuint id, GLenum st) {
 	GLint logLength;
 	glGetShaderiv(id, GL_INFO_LOG_LENGTH, &logLength);
@@ -87,6 +89,20 @@ void createVisibilityProgram() {
 		exit(-1);
 }
 
+
+void createQuadProgram() {
+	loadAndCompileShader("gcode_shaders/quad_v_shader.glsl", quad_v_shader,
+	GL_VERTEX_SHADER);
+	loadAndCompileShader("gcode_shaders/quad_f_shader.glsl", quad_f_shader,
+	GL_FRAGMENT_SHADER);
+
+	quad_program = glCreateProgram();
+	glAttachShader(quad_program, quad_v_shader);
+	glAttachShader(quad_program, quad_f_shader);
+	glLinkProgram(quad_program);
+	if (!check_program(quad_program, GL_LINK_STATUS))
+		exit(-1);
+}
 
 }
 
