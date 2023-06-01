@@ -16,7 +16,6 @@
 #include "globals.h"
 #include "camera.h"
 #include "shaders.h"
-#include "skybox.h"
 #include "billboard.h"
 
 namespace fps {
@@ -217,25 +216,6 @@ void render(const billboard::BufferedPath& path) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);checkGl();
 	glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);checkGl();
 
-    //SKYBOX DRAW
-	glUseProgram(shaderProgram::skybox_program);checkGl();
-	glBindVertexArray(skybox::skyboxVAO);checkGl();
-
-	glDisable(GL_DEPTH_TEST);checkGl();
-	glDepthMask(false);checkGl();
-
-	glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));checkGl();
-	glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));checkGl();
-
-	glDrawElements(GL_TRIANGLES, skybox::indicesData.size(), GL_UNSIGNED_INT, 0);checkGl();
-
-	glEnable(GL_DEPTH_TEST);checkGl();
-	glDepthMask(true);checkGl();
-
-	glUseProgram(0);checkGl();
-	glBindVertexArray(0);checkGl();
-
-
 	// BILLBOARDED EXTRUSION PATHS
     glBindVertexArray(billboard::billboardVAO);
     glUseProgram(shaderProgram::billboard_program);
@@ -260,9 +240,7 @@ void render(const billboard::BufferedPath& path) {
 }
 
 void setup() {
-	shaderProgram::createSkyboxProgram();
 	shaderProgram::createBillboardProgram();
-	skybox::init();
 	billboard::init();
 	glClearColor(0.0,0.0,0.6,0.0);
 	checkGl();

@@ -9,6 +9,7 @@
 #ifndef BILLBOARD_H_
 #define BILLBOARD_H_
 
+#include <cstddef>
 #include <epoxy/gl_generated.h>
 #include "glm/glm.hpp"
 #include <glm/fwd.hpp>
@@ -19,6 +20,7 @@
 
 namespace billboard {
 GLuint billboardVAO, vertexBuffer;
+GLuint visiblityFrameBuffer, instanceIdsTexture, depthTexture;
 
 GLuint pathSSBObindPoint = 5;
 
@@ -51,6 +53,7 @@ struct PathPoint
 struct BufferedPath
 {
     GLuint path_buffer;
+    GLuint visibility_buffer;
     size_t point_count;
 };
 BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
@@ -72,6 +75,22 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
     // Unbind the SSBO
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0); checkGl();
+
+    // This section initializes the visibility SSBO that will store visible lines of the current frame. notice the GL_STREAM_DRAW     
+      // Create and bind the SSBO
+    glGenBuffers(1, &result.visibility_buffer); checkGl();
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, result.visibility_buffer); checkGl();
+
+    // Allocate memory for the SSBO
+    glBufferData(GL_SHADER_STORAGE_BUFFER, path_points.size() * sizeof(int), NULL, GL_STREAM_DRAW);
+    checkGl();
+
+    // Bind the SSBO to an indexed buffer binding point
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, result.visibility_buffer); checkGl();
+
+    // Unbind the SSBO
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0); checkGl();
+
     glBindVertexArray(0);
 
     return result;
@@ -118,6 +137,30 @@ void init()
     checkGl();
 
     glBindVertexArray(0);
+
+    glGenFramebuffers(1, &visiblityFrameBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, visiblityFrameBuffer);
+
+	glActiveTexture(GL_TEXTURE1);
+    glGenTextures(1, &instanceIdsTexture);
+    glBindTexture(GL_TEXTURE_2D, instanceIdsTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32I, globals::screenResolution.x / 4,globals::screenResolution.y / 4, 0, GL_RGBA_INTEGER, GL_INT, NULL);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, instanceIdsTexture, 0);
+
+	checkGl();
+
+	glActiveTexture(GL_TEXTURE2);
+	glGenTextures(1, &depthTexture);
+	glBindTexture(GL_TEXTURE_2D, depthTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::screenResolution.x / 4,
+			globals::screenResolution.y / 4, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+	glNamedFramebufferTexture(visiblityFrameBuffer, GL_DEPTH_ATTACHMENT, depthTexture, 0);
+
+	checkGl();
+	checkGLCall(glCheckNamedFramebufferStatus(visiblityFrameBuffer, GL_FRAMEBUFFER));
+    //OpenGL message: 36053 means that the framebuffer does not allow multisampling. Which makes sense, it is full of integers
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 } // namespace billboard

@@ -59,20 +59,6 @@ void loadAndCompileShader(std::string source, GLuint& destination, GLenum type) 
 		exit(-1);
 }
 
-void createSkyboxProgram() {
-	loadAndCompileShader("skybox_shaders/v_shader.glsl", skybox_v_shader,
-	GL_VERTEX_SHADER);
-	loadAndCompileShader("skybox_shaders/f_shader.glsl", skybox_f_shader,
-	GL_FRAGMENT_SHADER);
-
-	skybox_program = glCreateProgram();
-	glAttachShader(skybox_program, skybox_v_shader);
-	glAttachShader(skybox_program, skybox_f_shader);
-	glLinkProgram(skybox_program);
-	if (!check_program(skybox_program, GL_LINK_STATUS))
-		exit(-1);
-}
-
 void createBillboardProgram() {
 	loadAndCompileShader("billboard_shaders/v_shader.glsl", billboard_v_shader,
 	GL_VERTEX_SHADER);
