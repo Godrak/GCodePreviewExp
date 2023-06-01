@@ -84,12 +84,11 @@ void main() {
     // directions of the line box in world space
     float line_len = length(pos_a-pos_b); 
     vec3 line = pos_b-pos_a;
-    vec3 line_dir = (pos_a-pos_b) / line_len; 
 
     vec3 color_a = colors[points[id_a].type];
     vec3 color_b = colors[points[id_b].type];
     // ################################
-    float limit = line_len;
+    float limit = line_len + max(max(half_height_a, half_width_a), max(half_height_b, half_width_b));
     
     float traversed = 0;
     vec3 surface_point = pos;
