@@ -95,7 +95,7 @@ void main() {
     // extend beyond the path points by half width - It allows for seamless connections, 
     // also it better represents the reality (with the caps rounded in frag shader)
     float cap_sign = vertex_id < 4 ? -1.0 : 1.0;
-    vec3 cap = (half_width - 0.001) * line_dir * dir_sign * cap_sign;
+    vec3 cap = half_width * line_dir * dir_sign * cap_sign;
 
     vec3 horizontal_dir = half_width * right_dir * signDotABminusDotAC(camera_right_dir_nn, view_b, view_a);
     vec3 vertical_dir = half_height * up_dir * dir_sign * signDotABminusDotAC(camera_up_dir_nn, view_b, view_a);

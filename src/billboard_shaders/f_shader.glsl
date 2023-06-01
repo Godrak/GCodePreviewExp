@@ -100,7 +100,7 @@ void main() {
 
     int iter = 0;
     while (traversed < limit && last_depth > 0 && iter < 5) {
-        float dist = max(last_depth*0.8, 1e-6);
+        float dist = max(last_depth*0.8, 1e-4); // the 0.8 factor here prevents the ray from going through the line in extreme cases, leaving gaps
         surface_point = surface_point + ray_dir *  dist;
         traversed += dist;
 
