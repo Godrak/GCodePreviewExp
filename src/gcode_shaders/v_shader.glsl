@@ -2,6 +2,7 @@
 
 layout(location = 0) uniform mat4 view_projection;
 layout(location = 1) uniform vec3 camera_position;
+layout(location = 2) uniform int visibility_pass;
 
 layout(location = 0) in int vertex_id;
 
@@ -18,6 +19,11 @@ struct PathPoint {
 // Binding point for the path data SSBO
 layout(std430, binding = 0) buffer PathBuffer {
     PathPoint points[];
+};
+
+// Binding point for the path data SSBO
+layout(std430, binding = 1) buffer VisibilityBuffer {
+    int visible_ids[];
 };
 
 out flat int id_a;
@@ -37,11 +43,16 @@ void main() {
     id_a = int(gl_InstanceID);
     id_b = int(gl_InstanceID) + 1;
 
+    if (visibility_pass == 0 || (visible_ids[id_a] == 0 && visible_ids[id_b] == 0)) {
+        gl_Position = vec4(0);
+        return;
+    }
+
     vec3 pos_a = vec3(points[id_a].pos_xy, points[id_a].pos_z);
     vec3 pos_b = vec3(points[id_b].pos_xy, points[id_b].pos_z);
 
     if (points[id_a].width < 0 || points[id_b].width < 0) {
-        gl_Position = view_projection * vec4(vec3(0), 1.0);
+        gl_Position = vec4(0);
         return;
     }
 

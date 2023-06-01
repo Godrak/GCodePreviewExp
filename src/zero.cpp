@@ -83,11 +83,11 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 			glfwSwapInterval(vsync);
 			break;
 		case GLFW_KEY_R:
-			config::percentage_to_show += 0.01;
+			config::percentage_to_show += 0.005;
 			config::percentage_to_show = fmin(1.0f, config::percentage_to_show);
 			break;
 		case GLFW_KEY_F:
-			config::percentage_to_show -= 0.01;
+			config::percentage_to_show -= 0.005;
 			config::percentage_to_show = fmax(0.0f, config::percentage_to_show);
 			break;
 		case GLFW_KEY_W:
@@ -209,24 +209,61 @@ void render(const gcode::BufferedPath& path) {
 	camera::applyViewTransform(view_projection);
 	camera::applyProjectionTransform(view_projection);
 
+	// Visibility pass. This will store visible points IDs into the visibility framebuffer texture
 
+	//first, reset the visibility values
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, path.visibility_buffer);
+	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32I, GL_RED_INTEGER, GL_INT, 0);
 
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);checkGl();
+	// bind visibility framebuffer, clear it and render all lines
+	glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFrameBuffer);checkGl();
 	glEnable(GL_DEPTH_TEST);
+	glClearColor(0.0,0.0,0.0,0.0); // This will be interpreted as one integer, probably from the first component. I am putting it here anyway, to make it clear
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);checkGl();
-	glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);checkGl();
+	glViewport(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y);checkGl();
+
+	// expcet for the different resolution and shader program, this render pass is same as the final GCode render.
+	// what happens here is that all boxes of all lines are rendered, but only the visible ones will have their ids written into the framebuffer
+    glBindVertexArray(gcode::gcodeVAO);
+    glUseProgram(shaderProgram::visibility_program);
+    checkGl();
+
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, path.path_buffer); // Bind the SSBO to the indexed buffer binding point 0
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, path.visibility_buffer);
+
+    glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
+    glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
+    glUniform1i(globals::visibility_pass_location, true);
+    checkGl();
+    glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertexData.size(),
+                          std::max(size_t(2), size_t((path.point_count - 1) * config::percentage_to_show)));
+    checkGl();
+
+    glUseProgram(0);
+    glBindVertexArray(0);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    checkGl();
+    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.0, 0.0, 0.6, 0.0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    checkGl();
+    glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
+    checkGl();
 
     glBindVertexArray(gcode::gcodeVAO);
     glUseProgram(shaderProgram::gcode_program);
     checkGl();
 
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, path.path_buffer); // Bind the SSBO to the indexed buffer binding point 0
-	
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, path.path_buffer); // Bind the SSBO to the indexed buffer binding point 0
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, path.visibility_buffer);
+
     glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
     glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
+    glUniform1i(globals::visibility_pass_location, true);
     checkGl();
-    glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertexData.size(), std::max(size_t(2),size_t((path.point_count-1) * config::percentage_to_show)));
+    glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertexData.size(),
+                          std::max(size_t(2), size_t((path.point_count - 1) * config::percentage_to_show)));
     checkGl();
 
     glUseProgram(0);
@@ -240,9 +277,9 @@ void render(const gcode::BufferedPath& path) {
 }
 
 void setup() {
-	shaderProgram::creategcodeProgram();
+	shaderProgram::createGCodeProgram();
+	shaderProgram::createVisibilityProgram();
 	gcode::init();
-	glClearColor(0.0,0.0,0.6,0.0);
 	checkGl();
 }
 

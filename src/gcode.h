@@ -20,7 +20,7 @@
 
 namespace gcode {
 GLuint gcodeVAO, vertexBuffer;
-GLuint visiblityFrameBuffer, instanceIdsTexture, depthTexture;
+GLuint visibilityFrameBuffer, instanceIdsTexture, depthTexture;
 
 GLuint pathSSBObindPoint = 5;
 
@@ -138,13 +138,13 @@ void init()
 
     glBindVertexArray(0);
 
-    glGenFramebuffers(1, &visiblityFrameBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, visiblityFrameBuffer);
+    glGenFramebuffers(1, &visibilityFrameBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, visibilityFrameBuffer);
 
 	glActiveTexture(GL_TEXTURE1);
     glGenTextures(1, &instanceIdsTexture);
     glBindTexture(GL_TEXTURE_2D, instanceIdsTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32I, globals::screenResolution.x / 4,globals::screenResolution.y / 4, 0, GL_RGBA_INTEGER, GL_INT, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32I, globals::visibilityResolution.x ,globals::visibilityResolution.y, 0, GL_RGBA_INTEGER, GL_INT, NULL);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, instanceIdsTexture, 0);
 
 	checkGl();
@@ -152,12 +152,12 @@ void init()
 	glActiveTexture(GL_TEXTURE2);
 	glGenTextures(1, &depthTexture);
 	glBindTexture(GL_TEXTURE_2D, depthTexture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::screenResolution.x / 4,
-			globals::screenResolution.y / 4, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-	glNamedFramebufferTexture(visiblityFrameBuffer, GL_DEPTH_ATTACHMENT, depthTexture, 0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::visibilityResolution.x,
+			globals::visibilityResolution.y, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+	glNamedFramebufferTexture(visibilityFrameBuffer, GL_DEPTH_ATTACHMENT, depthTexture, 0);
 
 	checkGl();
-	checkGLCall(glCheckNamedFramebufferStatus(visiblityFrameBuffer, GL_FRAMEBUFFER));
+	checkGLCall(glCheckNamedFramebufferStatus(visibilityFrameBuffer, GL_FRAMEBUFFER));
     //OpenGL message: 36053 means that the framebuffer does not allow multisampling. Which makes sense, it is full of integers
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);

@@ -10,6 +10,8 @@
 namespace shaderProgram {
 GLuint gcode_v_shader, gcode_f_shader, gcode_program;
 
+GLuint visibility_v_shader, visibility_f_shader, visibility_program;
+
 bool check_shader(std::string source, GLuint id, GLenum st) {
 	GLint logLength;
 	glGetShaderiv(id, GL_INFO_LOG_LENGTH, &logLength);
@@ -57,7 +59,7 @@ void loadAndCompileShader(std::string source, GLuint& destination, GLenum type) 
 		exit(-1);
 }
 
-void creategcodeProgram() {
+void createGCodeProgram() {
 	loadAndCompileShader("gcode_shaders/v_shader.glsl", gcode_v_shader,
 	GL_VERTEX_SHADER);
 	loadAndCompileShader("gcode_shaders/f_shader.glsl", gcode_f_shader,
@@ -70,6 +72,21 @@ void creategcodeProgram() {
 	if (!check_program(gcode_program, GL_LINK_STATUS))
 		exit(-1);
 }
+
+void createVisibilityProgram() {
+	loadAndCompileShader("gcode_shaders/v_shader.glsl", visibility_v_shader,
+	GL_VERTEX_SHADER);
+	loadAndCompileShader("gcode_shaders/vis_f_shader.glsl", visibility_f_shader,
+	GL_FRAGMENT_SHADER);
+
+	visibility_program = glCreateProgram();
+	glAttachShader(visibility_program, visibility_v_shader);
+	glAttachShader(visibility_program, visibility_f_shader);
+	glLinkProgram(visibility_program);
+	if (!check_program(visibility_program, GL_LINK_STATUS))
+		exit(-1);
+}
+
 
 }
 
