@@ -1,7 +1,11 @@
 #ifndef GLOBALS_H_
 #define GLOBALS_H_
 
+#include "epoxy/gl.h"
+#include <epoxy/gl_generated.h>
+
 #include <glm/glm.hpp>
+#include <iostream>
 
 namespace globals {
 

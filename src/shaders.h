@@ -1,11 +1,11 @@
 #ifndef SHADERS_H_
 #define SHADERS_H_
 
-#include <epoxy/gl.h>
+#include "globals.h"
 #include <iostream>
+#include <fstream>
 #include <string>
 
-#include "globals.h"
 
 namespace shaderProgram {
 GLuint gcode_v_shader, gcode_f_shader, gcode_program;

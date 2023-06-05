@@ -9,14 +9,12 @@
 #ifndef GCODE_H_
 #define GCODE_H_
 
+#include "globals.h"
 #include <cstddef>
-#include <epoxy/gl_generated.h>
-#include "glm/glm.hpp"
 #include <glm/fwd.hpp>
 #include <vector>
 #include <random>
 #include <iostream>
-#include "globals.h"
 
 namespace gcode {
 GLuint gcodeVAO, vertexBuffer;
