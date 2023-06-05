@@ -82,6 +82,10 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 			std::cout << "vsync: " << vsync << std::endl;
 			glfwSwapInterval(vsync);
 			break;
+		case GLFW_KEY_F4:
+			config::with_visibility_pass = 1 - config::with_visibility_pass;
+			std::cout << "with_visibility_pass: " << config::with_visibility_pass << std::endl;
+			break;
 		case GLFW_KEY_R:
 			config::percentage_to_show += 0.005;
 			config::percentage_to_show = fmin(1.0f, config::percentage_to_show);
@@ -182,8 +186,6 @@ float lastTime;
 float currentTime;
 glm::vec3 lastCameraPosition = camera::position;
 
-bool with_visibility_pass = true;
-
 void switchConfiguration() {
 	if (config::geometryMode) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);checkGl();
@@ -211,7 +213,7 @@ void render(const gcode::BufferedPath& path) {
 	camera::applyViewTransform(view_projection);
 	camera::applyProjectionTransform(view_projection);
 
-	if (with_visibility_pass) {
+	if (config::with_visibility_pass) {
 		// Visibility pass. This will store visible points IDs into the visibility framebuffer texture
 		// first, reset the visibility values
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, path.visibility_buffer);
@@ -265,11 +267,6 @@ void render(const gcode::BufferedPath& path) {
 		checkGl();
 		glUseProgram(0);
 		glBindVertexArray(0);
-	} else {
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, path.visibility_buffer);
-		int v = 1;
-		glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32I, GL_RED_INTEGER, GL_INT, &v);
-
 	}
 
 	// Now render only the visible lines, with the expensive frag shader
