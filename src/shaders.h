@@ -3,16 +3,16 @@
 
 #include "globals.h"
 
-#if !USE_GLAD
-#include <epoxy/gl.h>
-#endif // !USE_GLAD
 #include <iostream>
+#include <fstream>
 #include <string>
 
 namespace shaderProgram {
-GLuint skybox_v_shader, skybox_f_shader, skybox_program;
+GLuint gcode_v_shader, gcode_f_shader, gcode_program;
 
-GLuint billboard_v_shader, billboard_f_shader, billboard_program;
+GLuint visibility_v_shader, visibility_f_shader, visibility_program;
+
+GLuint quad_v_shader, quad_f_shader, quad_program;
 
 bool check_shader(std::string source, GLuint id, GLenum st) {
 	GLint logLength;
@@ -68,31 +68,46 @@ static const std::string shaders_path = "C:/prusa/references/GCodePreviewExp/win
 static const std::string shaders_path = "";
 #endif // USE_HARDCODED_PATHS
 
-void createSkyboxProgram() {
-	loadAndCompileShader(shaders_path + "skybox_shaders/v_shader.glsl", skybox_v_shader,
+void createGCodeProgram() {
+	loadAndCompileShader(shaders_path + "gcode_shaders/v_shader.glsl", gcode_v_shader,
 	GL_VERTEX_SHADER);
-	loadAndCompileShader(shaders_path + "skybox_shaders/f_shader.glsl", skybox_f_shader,
+	loadAndCompileShader(shaders_path + "gcode_shaders/f_shader.glsl", gcode_f_shader,
 	GL_FRAGMENT_SHADER);
 
-	skybox_program = glCreateProgram();
-	glAttachShader(skybox_program, skybox_v_shader);
-	glAttachShader(skybox_program, skybox_f_shader);
-	glLinkProgram(skybox_program);
-	if (!check_program(skybox_program, GL_LINK_STATUS))
+	gcode_program = glCreateProgram();
+	glAttachShader(gcode_program, gcode_v_shader);
+	glAttachShader(gcode_program, gcode_f_shader);
+	glLinkProgram(gcode_program);
+	if (!check_program(gcode_program, GL_LINK_STATUS))
 		exit(-1);
 }
 
-void createBillboardProgram() {
-	loadAndCompileShader(shaders_path + "billboard_shaders/v_shader.glsl", billboard_v_shader,
+void createVisibilityProgram() {
+	loadAndCompileShader(shaders_path + "gcode_shaders/v_shader.glsl", visibility_v_shader,
 	GL_VERTEX_SHADER);
-	loadAndCompileShader(shaders_path + "billboard_shaders/f_shader.glsl", billboard_f_shader,
+	loadAndCompileShader(shaders_path + "gcode_shaders/vis_f_shader.glsl", visibility_f_shader,
 	GL_FRAGMENT_SHADER);
 
-	billboard_program = glCreateProgram();
-	glAttachShader(billboard_program, billboard_v_shader);
-	glAttachShader(billboard_program, billboard_f_shader);
-	glLinkProgram(billboard_program);
-	if (!check_program(billboard_program, GL_LINK_STATUS))
+	visibility_program = glCreateProgram();
+	glAttachShader(visibility_program, visibility_v_shader);
+	glAttachShader(visibility_program, visibility_f_shader);
+	glLinkProgram(visibility_program);
+	if (!check_program(visibility_program, GL_LINK_STATUS))
+		exit(-1);
+}
+
+
+void createQuadProgram() {
+	loadAndCompileShader(shaders_path + "gcode_shaders/quad_v_shader.glsl", quad_v_shader,
+	GL_VERTEX_SHADER);
+	loadAndCompileShader(shaders_path + "gcode_shaders/quad_f_shader.glsl", quad_f_shader,
+	GL_FRAGMENT_SHADER);
+
+	quad_program = glCreateProgram();
+	glAttachShader(quad_program, quad_v_shader);
+	glAttachShader(quad_program, quad_f_shader);
+	glLinkProgram(quad_program);
+	if (!check_program(quad_program, GL_LINK_STATUS))
 		exit(-1);
 }
 

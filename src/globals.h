@@ -4,6 +4,9 @@
 #define USE_GLAD 1
 #if USE_GLAD
 #include <glad/glad.h>
+#else
+#include "epoxy/gl.h"
+#include <epoxy/gl_generated.h>
 #endif // USE_GLAD
 
 #include <glm/glm.hpp>
@@ -11,17 +14,20 @@
 
 namespace globals {
 
-glm::ivec2 screenResolution = {1600,830};
+glm::ivec2 screenResolution = {1500,830};
+// I hoped that vis resolution could be lower, to reduce the rasterization load. Sadly, it the flickering of lines on and off is then much much worse
+glm::ivec2 visibilityResolution = screenResolution;
 
 GLint vp_location = 0;
 GLint camera_position_location = 1;
-GLint screen_size_location = 2;
+GLint visibility_pass_location = 2;
 }
 
 namespace config {
 bool updateCameraPosition = true;
 bool geometryMode = false;
 float percentage_to_show = 1.0;
+bool with_visibility_pass = true;
 }
 
 static bool check_opengl() {

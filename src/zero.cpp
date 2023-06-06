@@ -1,9 +1,5 @@
 #include "globals.h"
 
-#if !USE_GLAD
-#include <epoxy/gl.h>
-#include <epoxy/gl_generated.h>
-#endif // !USE_GLAD
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -18,8 +14,7 @@
 
 #include "camera.h"
 #include "shaders.h"
-#include "skybox.h"
-#include "billboard.h"
+#include "gcode.h"
 
 namespace fps {
 static double fpsOrigin = 0.0;
@@ -86,12 +81,16 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 			std::cout << "vsync: " << vsync << std::endl;
 			glfwSwapInterval(vsync);
 			break;
+		case GLFW_KEY_F4:
+			config::with_visibility_pass = 1 - config::with_visibility_pass;
+			std::cout << "with_visibility_pass: " << config::with_visibility_pass << std::endl;
+			break;
 		case GLFW_KEY_R:
-			config::percentage_to_show += 0.01;
+			config::percentage_to_show += 0.005;
 			config::percentage_to_show = fmin(1.0f, config::percentage_to_show);
 			break;
 		case GLFW_KEY_F:
-			config::percentage_to_show -= 0.01;
+			config::percentage_to_show -= 0.005;
 			config::percentage_to_show = fmax(0.0f, config::percentage_to_show);
 			break;
 		case GLFW_KEY_W:
@@ -210,7 +209,7 @@ void switchConfiguration() {
 	}
 }
 
-void render(const billboard::BufferedPath& path) {
+void render(const gcode::BufferedPath& path) {
 	currentTime = float(glfwGetTime());checkGl();
 	auto delta = currentTime - lastTime;
 	lastTime = currentTime;
@@ -230,45 +229,85 @@ void render(const billboard::BufferedPath& path) {
 	camera::applyViewTransform(view_projection);
 	camera::applyProjectionTransform(view_projection);
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glEnable(GL_DEPTH_TEST);
+	if (config::with_visibility_pass) {
+		// Visibility pass. This will store visible points IDs into the visibility framebuffer texture
+		// first, reset the visibility values
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, path.visibility_buffer);
+		glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32I, GL_RED_INTEGER, GL_INT, 0);
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);checkGl();
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);checkGl();
-	glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);checkGl();
+		// bind visibility framebuffer, clear it and render all lines
+		glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFrameBuffer);
+		checkGl();
+		glEnable(GL_DEPTH_TEST);
+		glClearColor(0.0, 0.0, 0.0, 0.0); // This will be interpreted as one integer, probably from the first component. I am putting it
+										// here anyway, to make it clear
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		checkGl();
+		glViewport(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y);
 
-    //SKYBOX DRAW
-	glUseProgram(shaderProgram::skybox_program);checkGl();
-	glBindVertexArray(skybox::skyboxVAO);checkGl();
+		// except for the different resolution and shader program, this render pass is same as the final GCode render.
+		// what happens here is that all boxes of all lines are rendered, but only the visible ones will have their ids written into the framebuffer
+		glBindVertexArray(gcode::gcodeVAO);
+		glUseProgram(shaderProgram::visibility_program);
+		checkGl();
 
-	glDisable(GL_DEPTH_TEST);checkGl();
-	glDepthMask(false);checkGl();
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, path.path_buffer); // Bind the SSBO to the indexed buffer binding point 0
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, path.visibility_buffer);
 
-	glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));checkGl();
-	glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));checkGl();
-	glUniform2iv(globals::screen_size_location, 1, glm::value_ptr(globals::screenResolution));checkGl();
+		glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
+		glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
+		// this tells the vertex shader to ignore visiblity values and render all lines instead
+		glUniform1i(globals::visibility_pass_location, true);
+		checkGl();
+		glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size,
+							std::max(size_t(2), size_t((path.point_count - 1) * config::percentage_to_show)));
+		checkGl();
 
-	glDrawElements(GL_TRIANGLES, skybox::indicesData.size(), GL_UNSIGNED_INT, 0);checkGl();
+		glUseProgram(0);
+		glBindVertexArray(0);
 
-	glEnable(GL_DEPTH_TEST);checkGl();
-	glDepthMask(true);checkGl();
+		// now with the visibility texture filled with ids, we need to set the values in the visibility buffer to true for corresponding values
+		glBindVertexArray(gcode::quadVAO);
+		glUseProgram(shaderProgram::quad_program);
 
-	glUseProgram(0);checkGl();
-	glBindVertexArray(0);checkGl();
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, path.visibility_buffer);
 
+		glActiveTexture(GL_TEXTURE1);    
+		glBindTexture(GL_TEXTURE_2D, gcode::instanceIdsTexture);
+		glBindImageTexture(1 /*UNIT*/, gcode::instanceIdsTexture, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32I);
+		
+		checkGl();
 
-	// BILLBOARDED EXTRUSION PATHS
-    glBindVertexArray(billboard::billboardVAO);
-    glUseProgram(shaderProgram::billboard_program);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		
+		checkGl();
+		glUseProgram(0);
+		glBindVertexArray(0);
+	}
+
+	// Now render only the visible lines, with the expensive frag shader
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    checkGl();
+    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.0, 0.0, 0.6, 0.0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    checkGl();
+    glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
     checkGl();
 
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_RECTANGLE, path.pathTexture);
-	
+    glBindVertexArray(gcode::gcodeVAO);
+    glUseProgram(shaderProgram::gcode_program);
+    checkGl();
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, path.path_buffer); // Bind the SSBO to the indexed buffer binding point 0
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, path.visibility_buffer);
+
     glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
     glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
+    glUniform1i(globals::visibility_pass_location, false);
     checkGl();
-    glDrawArraysInstanced(GL_TRIANGLES, 0, billboard::vertexData.size(), std::max(size_t(2),size_t((path.point_count-1) * config::percentage_to_show)));
+    glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size,
+                          std::max(size_t(2), size_t((path.point_count - 1) * config::percentage_to_show)));
     checkGl();
 
     glUseProgram(0);
@@ -282,20 +321,19 @@ void render(const billboard::BufferedPath& path) {
 }
 
 void setup() {
-	shaderProgram::createSkyboxProgram();
-	shaderProgram::createBillboardProgram();
-	skybox::init();
-	billboard::init();
-	glClearColor(0.0,0.0,0.6,0.0);
+	shaderProgram::createGCodeProgram();
+	shaderProgram::createVisibilityProgram();
+	shaderProgram::createQuadProgram();
+	gcode::init();
 	checkGl();
 }
 
 }
 
 // Reader function to load vector of PathPoints from a file
-std::vector<billboard::PathPoint> readPathPoints(const std::string& filename)
+std::vector<gcode::PathPoint> readPathPoints(const std::string& filename)
 {
-    std::vector<billboard::PathPoint> pathPoints;
+    std::vector<gcode::PathPoint> pathPoints;
 
     std::ifstream file(filename, std::ios::binary);
     if (!file)
@@ -339,8 +377,8 @@ int main(int argc, char* argv[]) {
 
 	rendering::setup();
 
-	// billboard::BufferedPath path = billboard::generateTestingPathPoints();
-	billboard::BufferedPath path = billboard::bufferExtrusionPaths(points);
+	// gcode::BufferedPath path = gcode::generateTestingPathPoints();
+	gcode::BufferedPath path = gcode::bufferExtrusionPaths(points);
 
 	std::cout << "PATHS BUFFERED" << std::endl;
 
