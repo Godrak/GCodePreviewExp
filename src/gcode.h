@@ -18,12 +18,15 @@
 
 namespace gcode {
 GLuint gcodeVAO, vertexBuffer;
-GLuint visibilityFrameBuffer, instanceIdsTexture, depthTexture;
+GLuint visibilityVAO, lineVertexBuffer, visibilityFrameBuffer, instanceIdsTexture, depthTexture;
 GLuint quadVAO;
 
 GLuint pathSSBObindPoint = 5;
 
 GLint vid_loc = 0;
+
+size_t line_data_size = 2;
+int line_data[] = {0, 1};
 
 size_t vertex_data_size = 18;
 int vertex_data[] = {  
@@ -164,6 +167,21 @@ void init()
     checkGl();
 
     glBindVertexArray(0);
+
+    glGenVertexArrays(1, &visibilityVAO);
+    glBindVertexArray(visibilityVAO);
+
+    glGenBuffers(1, &lineVertexBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, lineVertexBuffer);
+
+    checkGl();
+
+    glBufferData(GL_ARRAY_BUFFER, line_data_size * sizeof(int), line_data, GL_STATIC_DRAW);
+
+    // vertex attributes - id:
+    glEnableVertexAttribArray(vid_loc);
+    glVertexAttribIPointer(vid_loc, 1, GL_INT, sizeof(int), (void *)0);
+    checkGl();
 
     glGenFramebuffers(1, &visibilityFrameBuffer);
     glGenTextures(1, &instanceIdsTexture);

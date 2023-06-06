@@ -207,7 +207,7 @@ void render(const gcode::BufferedPath& path) {
 	auto delta = currentTime - lastTime;
 	lastTime = currentTime;
 	glfwGetFramebufferSize(glfwContext::window, &globals::screenResolution.x, &globals::screenResolution.y);checkGl();
-	auto new_vis_resolution = globals::screenResolution;
+	auto new_vis_resolution = globals::screenResolution * 4;
 	if (new_vis_resolution != globals::visibilityResolution) {
 		globals::visibilityResolution = new_vis_resolution;
 		gcode::recreateVisibilityBufferOnResolutionChange();
@@ -245,7 +245,7 @@ void render(const gcode::BufferedPath& path) {
 
 		// except for the different resolution and shader program, this render pass is same as the final GCode render.
 		// what happens here is that all boxes of all lines are rendered, but only the visible ones will have their ids written into the framebuffer
-		glBindVertexArray(gcode::gcodeVAO);
+		glBindVertexArray(gcode::visibilityVAO);
 		glUseProgram(shaderProgram::visibility_program);
 		checkGl();
 
@@ -253,11 +253,8 @@ void render(const gcode::BufferedPath& path) {
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, path.visibility_buffer);
 
 		glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
-		glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
-		// this tells the vertex shader to ignore visiblity values and render all lines instead
-		glUniform1i(globals::visibility_pass_location, true);
 		checkGl();
-		glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size,
+		glDrawArraysInstanced(GL_LINES, 0, gcode::line_data_size,
 							std::max(size_t(2), size_t((path.point_count - 1) * config::percentage_to_show)));
 		checkGl();
 
