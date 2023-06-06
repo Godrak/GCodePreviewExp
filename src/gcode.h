@@ -112,6 +112,40 @@ BufferedPath generateTestingPathPoints()
    return bufferExtrusionPaths(pathPoints);
 }
 
+void recreateVisibilityBufferOnResolutionChange()
+{
+    // Delete existing textures and framebuffer
+    glDeleteTextures(1, &instanceIdsTexture);
+    glDeleteTextures(1, &depthTexture);
+    glDeleteFramebuffers(1, &visibilityFrameBuffer);
+
+    glGenFramebuffers(1, &visibilityFrameBuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, visibilityFrameBuffer);
+
+    glActiveTexture(GL_TEXTURE1);
+    glGenTextures(1, &instanceIdsTexture);
+    glBindTexture(GL_TEXTURE_2D, instanceIdsTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32I, globals::visibilityResolution.x, globals::visibilityResolution.y, 0, GL_RED_INTEGER, GL_INT,
+                 nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, instanceIdsTexture, 0);
+
+    checkGl();
+
+    glActiveTexture(GL_TEXTURE2);
+    glGenTextures(1, &depthTexture);
+    glBindTexture(GL_TEXTURE_2D, depthTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::visibilityResolution.x, globals::visibilityResolution.y, 0,
+                 GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+    glNamedFramebufferTexture(visibilityFrameBuffer, GL_DEPTH_ATTACHMENT, depthTexture, 0);
+
+    checkGl();
+    checkGLCall(glCheckNamedFramebufferStatus(visibilityFrameBuffer, GL_FRAMEBUFFER));
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void init()
 {
     glGenVertexArrays(1, &gcodeVAO);
@@ -132,30 +166,9 @@ void init()
     glBindVertexArray(0);
 
     glGenFramebuffers(1, &visibilityFrameBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, visibilityFrameBuffer);
-
-	glActiveTexture(GL_TEXTURE1);
     glGenTextures(1, &instanceIdsTexture);
-    glBindTexture(GL_TEXTURE_2D, instanceIdsTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32I, globals::visibilityResolution.x, globals::visibilityResolution.y, 0, GL_RED_INTEGER, GL_INT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, instanceIdsTexture, 0);
-
-	checkGl();
-
-	glActiveTexture(GL_TEXTURE2);
 	glGenTextures(1, &depthTexture);
-	glBindTexture(GL_TEXTURE_2D, depthTexture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::visibilityResolution.x,
-			globals::visibilityResolution.y, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-	glNamedFramebufferTexture(visibilityFrameBuffer, GL_DEPTH_ATTACHMENT, depthTexture, 0);
-
-	checkGl();
-	checkGLCall(glCheckNamedFramebufferStatus(visibilityFrameBuffer, GL_FRAMEBUFFER));
-    //OpenGL message: 36053 means that the framebuffer is complete
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    recreateVisibilityBufferOnResolutionChange();
 
     glGenVertexArrays(1, &quadVAO);
     glBindVertexArray(quadVAO);
@@ -164,6 +177,7 @@ void init()
 
     glBindVertexArray(0);
 }
+
 
 } // namespace gcode
 

@@ -207,6 +207,11 @@ void render(const gcode::BufferedPath& path) {
 	auto delta = currentTime - lastTime;
 	lastTime = currentTime;
 	glfwGetFramebufferSize(glfwContext::window, &globals::screenResolution.x, &globals::screenResolution.y);checkGl();
+	auto new_vis_resolution = globals::screenResolution;
+	if (new_vis_resolution != globals::visibilityResolution) {
+		globals::visibilityResolution = new_vis_resolution;
+		gcode::recreateVisibilityBufferOnResolutionChange();
+	}
 
 	glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);checkGl();
 

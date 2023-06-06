@@ -9,7 +9,7 @@
 
 namespace globals {
 
-glm::ivec2 screenResolution = {1500,830};
+glm::ivec2 screenResolution = {512,512};
 // I hoped that vis resolution could be lower, to reduce the rasterization load. Sadly, it the flickering of lines on and off is then much much worse
 glm::ivec2 visibilityResolution = screenResolution;
 

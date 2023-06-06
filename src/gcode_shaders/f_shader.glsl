@@ -30,7 +30,7 @@ struct PathPoint {
 };
 
 // Binding point for the path data SSBO
-layout(std430, binding = 0) buffer PathBuffer {
+layout(std430, binding = 0) readonly buffer PathBuffer {
     PathPoint points[];
 };
 
