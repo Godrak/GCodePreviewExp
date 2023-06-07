@@ -6,25 +6,9 @@ layout(location = 2) uniform int visibility_pass;
 
 layout(location = 0) in int vertex_id;
 
-// Struct definition for PathPoint
-struct PathPoint {
-    vec2 pos_xy;
-    float pos_z;
-    int type;
-    float height;
-    float width;
-};
-
-
-// Binding point for the path data SSBO
-layout(std430, binding = 0) readonly buffer PathBuffer {
-    PathPoint points[];
-};
-
-// Binding point for the path data SSBO
-layout(std430, binding = 1) readonly buffer VisibilityBuffer {
-    int visible_ids[];
-};
+layout(binding = 0) uniform samplerBuffer positionsTex;
+layout(binding = 1) uniform samplerBuffer heightWidthTypeTex;
+layout(binding = 2) uniform samplerBuffer visibilityTex;
 
 out flat int id_a;
 out flat int id_b;
@@ -46,19 +30,19 @@ void main() {
     // if not visilibty pass and neither of line endpoints visible, throw away. 
     // (While it may seem confusing, it actually checks visibility of any point of the line, 
     // since we set endpoint A to visible for any fragment that makes to the visiblity framebuffer)
-    if (visibility_pass == 0 && visible_ids[id_a] == 0 && visible_ids[id_b] == 0) {
+    if (visibility_pass == 0 &&  texelFetch(visibilityTex, id_a).r == 0 && texelFetch(visibilityTex, id_b).r == 0) {
         gl_Position = vec4(0);
         return;
     }
 
-    vec3 pos_a = vec3(points[id_a].pos_xy, points[id_a].pos_z);
-    vec3 pos_b = vec3(points[id_b].pos_xy, points[id_b].pos_z);
-
-    if (points[id_a].width < 0 || points[id_b].width < 0) {
+    // ngeative width means disconnection, drop this line
+    if (texelFetch(heightWidthTypeTex, id_a).y < 0 || texelFetch(heightWidthTypeTex, id_b).y < 0) {
         gl_Position = vec4(0);
         return;
     }
 
+    vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
+    vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
 
 	vec3 line = pos_b - pos_a;
     vec3 view_a = pos_a - camera_position;
@@ -105,8 +89,9 @@ void main() {
 
     // for visiblity pass, make the lines smaller, so that there are no holes in the result.
     float h = (visibility_pass == 1) ? 0.4 : 0.5;
-    float half_height = h * points[id_final].height;
-    float half_width = h * points[id_final].width;
+    vec2 sizes = texelFetch(heightWidthTypeTex, id_final).xy; 
+    float half_height = h * sizes.x;
+    float half_width = h * sizes.y;
 
     // extend beyond the path points by half width - It allows for seamless connections, 
     // also it better represents the reality (with the caps rounded in frag shader)
@@ -116,7 +101,7 @@ void main() {
     vec3 horizontal_dir = half_width * right_dir * signDotABminusDotAC(camera_right_dir_nn, view_b, view_a);
     vec3 vertical_dir = half_height * up_dir * dir_sign * signDotABminusDotAC(camera_up_dir_nn, view_b, view_a);
 
-    pos = vec3(points[id_final].pos_xy,points[id_final].pos_z)  + cap + hsign * horizontal_dir + vsign * vertical_dir;
+    pos = texelFetch(positionsTex, id_final).xyz + cap + hsign * horizontal_dir + vsign * vertical_dir;
     gl_Position = view_projection * vec4(pos, 1.0);
 }
 
