@@ -225,8 +225,8 @@ void render(const gcode::BufferedPath& path, size_t iteration) {
 	if (config::with_visibility_pass) {
 
 		// Fire off a visiblity render pass into offscreen buffer
-        if (iteration % 3 == 0) {
-            auto new_vis_resolution = globals::screenResolution;
+        if (iteration % 10 == 0) {
+            auto new_vis_resolution = globals::screenResolution * 2;
             if (new_vis_resolution != globals::visibilityResolution) {
                 globals::visibilityResolution = new_vis_resolution;
                 gcode::recreateVisibilityBufferOnResolutionChange();
@@ -274,20 +274,19 @@ void render(const gcode::BufferedPath& path, size_t iteration) {
             glBindVertexArray(0);
         }
 
-        if (iteration % 3 == 1) {
+        if (iteration % 10 == 4) {
             glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
             glBufferData(GL_PIXEL_PACK_BUFFER, globals::visibilityResolution.x * globals::visibilityResolution.y * sizeof(unsigned int),
                          nullptr, GL_STREAM_READ);
-			glReadPixels(0,0, globals::visibilityResolution.x, globals::visibilityResolution.y, GL_RED, GL_UNSIGNED_INT, 0);
+			glReadPixels(0,0, globals::visibilityResolution.x, globals::visibilityResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
         }
 
-        if (iteration % 3 == 2) {
+        if (iteration % 10 == 9) {
             glBindBuffer(GL_TEXTURE_BUFFER, path.visibility_buffer);
             // https://www.khronos.org/opengl/wiki/Buffer_Object_Streaming    buffer respecification
             glBufferData(GL_TEXTURE_BUFFER, path.point_count * sizeof(bool), NULL, GL_STREAM_DRAW);
-	    	// bool v = 1;
-    		// glClearBufferData(GL_TEXTURE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, &v);
+    		glClearBufferData(GL_TEXTURE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, 0);
 
             // Map the buffer object into the client's memory space
             GLubyte *visibility_data = static_cast<GLubyte *>(glMapBuffer(GL_TEXTURE_BUFFER, GL_WRITE_ONLY));
@@ -298,8 +297,6 @@ void render(const gcode::BufferedPath& path, size_t iteration) {
             if (visibility_data && visible_ids) {
                 for (size_t i = 0; i < globals::visibilityResolution.x * globals::visibilityResolution.y; i++) {
                     visibility_data[visible_ids[i]] = 1;
-					if (visible_ids[i])
-						std::cout << "setting " << visible_ids[i] << "  to visible" << std::endl; 
                 }
             } else {
                 std::cout << "Something is terribly wrong" << std::endl;
