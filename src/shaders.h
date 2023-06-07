@@ -89,21 +89,6 @@ void createVisibilityProgram() {
 		exit(-1);
 }
 
-
-void createQuadProgram() {
-	loadAndCompileShader("gcode_shaders/quad_v_shader.glsl", quad_v_shader,
-	GL_VERTEX_SHADER);
-	loadAndCompileShader("gcode_shaders/quad_f_shader.glsl", quad_f_shader,
-	GL_FRAGMENT_SHADER);
-
-	quad_program = glCreateProgram();
-	glAttachShader(quad_program, quad_v_shader);
-	glAttachShader(quad_program, quad_f_shader);
-	glLinkProgram(quad_program);
-	if (!check_program(quad_program, GL_LINK_STATUS))
-		exit(-1);
-}
-
 }
 
 #endif /* SHADERS_H_ */

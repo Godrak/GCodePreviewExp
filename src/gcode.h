@@ -19,7 +19,7 @@
 
 namespace gcode {
 GLuint gcodeVAO, vertexBuffer;
-GLuint visibilityFrameBuffer, instanceIdsTexture, depthTexture;
+GLuint visibilityFramebuffer, instanceIdsTexture, depthTexture;
 GLuint quadVAO;
 
 GLuint pathSSBObindPoint = 5;
@@ -49,6 +49,8 @@ struct BufferedPath
     GLuint positions_texture, positions_buffer;
     GLuint height_width_type_texture, height_width_type_buffer;
     GLuint visibility_texture, visibility_buffer;
+    GLuint visibility_pixel_buffer;
+    glm::ivec2 visibility_texture_size; 
     size_t point_count;
 };
 
@@ -108,7 +110,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindBuffer(GL_TEXTURE_BUFFER, result.visibility_buffer);
 
     // buffer data to the path buffer
-    glBufferData(GL_TEXTURE_BUFFER, path_points.size() * sizeof(bool), nullptr, GL_DYNAMIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, path_points.size() * sizeof(bool), NULL, GL_STREAM_DRAW);
     bool v = 1;
     glClearBufferData(GL_TEXTURE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, &v);
 
@@ -124,6 +126,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
+	glGenBuffers(1, &result.visibility_pixel_buffer);
 
     glBindVertexArray(0);
 
@@ -157,15 +160,15 @@ void recreateVisibilityBufferOnResolutionChange()
     // Delete existing textures and framebuffer
     glDeleteTextures(1, &instanceIdsTexture);
     glDeleteTextures(1, &depthTexture);
-    glDeleteFramebuffers(1, &visibilityFrameBuffer);
+    glDeleteFramebuffers(1, &visibilityFramebuffer);
 
-    glGenFramebuffers(1, &visibilityFrameBuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, visibilityFrameBuffer);
+    glGenFramebuffers(1, &visibilityFramebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, visibilityFramebuffer);
 
     glActiveTexture(GL_TEXTURE1);
     glGenTextures(1, &instanceIdsTexture);
     glBindTexture(GL_TEXTURE_2D, instanceIdsTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32I, globals::visibilityResolution.x, globals::visibilityResolution.y, 0, GL_RED_INTEGER, GL_INT,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, globals::visibilityResolution.x, globals::visibilityResolution.y, 0, GL_RED_INTEGER, GL_INT,
                  nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -178,10 +181,10 @@ void recreateVisibilityBufferOnResolutionChange()
     glBindTexture(GL_TEXTURE_2D, depthTexture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::visibilityResolution.x, globals::visibilityResolution.y, 0,
                  GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-    glNamedFramebufferTexture(visibilityFrameBuffer, GL_DEPTH_ATTACHMENT, depthTexture, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
 
     checkGl();
-    checkGLCall(glCheckNamedFramebufferStatus(visibilityFrameBuffer, GL_FRAMEBUFFER));
+    checkGLCall(glCheckFramebufferStatus(visibilityFramebuffer));
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -205,7 +208,7 @@ void init()
 
     glBindVertexArray(0);
 
-    glGenFramebuffers(1, &visibilityFrameBuffer);
+    glGenFramebuffers(1, &visibilityFramebuffer);
     glGenTextures(1, &instanceIdsTexture);
 	glGenTextures(1, &depthTexture);
     recreateVisibilityBufferOnResolutionChange();
