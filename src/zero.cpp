@@ -1,10 +1,12 @@
 #include "globals.h"
 
 #include <GLFW/glfw3.h>
+#include <algorithm>
 #include <epoxy/gl_generated.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <iterator>
 #include <stdlib.h>
 #include <stdio.h>
 #include <fstream>
@@ -203,7 +205,7 @@ void switchConfiguration() {
 	}
 }
 
-void render(const gcode::BufferedPath& path, size_t iteration) {
+void render(gcode::BufferedPath& path, size_t iteration) {
 	currentTime = float(glfwGetTime());checkGl();
 	auto delta = currentTime - lastTime;
 	lastTime = currentTime;
@@ -222,93 +224,90 @@ void render(const gcode::BufferedPath& path, size_t iteration) {
 	camera::applyViewTransform(view_projection);
 	camera::applyProjectionTransform(view_projection);
 
-	// if (config::with_visibility_pass) {
+	if (config::with_visibility_pass) {
 
-	// 	// Fire off a visiblity render pass into offscreen buffer
-    //     if (iteration % 10 == 0) {
-    //         auto new_vis_resolution = globals::screenResolution * 2;
-    //         if (new_vis_resolution != globals::visibilityResolution) {
-    //             globals::visibilityResolution = new_vis_resolution;
-    //             gcode::recreateVisibilityBufferOnResolutionChange();
-    //         }
+		// Fire off a visiblity render pass into offscreen buffer
+        if (iteration % 3 == 0) {
+            auto new_vis_resolution = globals::screenResolution * 2;
+            if (new_vis_resolution != globals::visibilityResolution) {
+                globals::visibilityResolution = new_vis_resolution;
+                gcode::recreateVisibilityBufferOnResolutionChange();
+            }
 
-    //         // bind visibility framebuffer, clear it and render all lines
-    //         glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
-    //         checkGl();
-    //         glEnable(GL_DEPTH_TEST);
-    //         glClearColor(0.0, 0.0, 0.0, 0.0); // This will be interpreted as one integer, probably from the first component. I am putting it
-    //                                           // here anyway, to make it clear
-    //         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    //         checkGl();
-    //         glViewport(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y);
+            // bind visibility framebuffer, clear it and render all lines
+            glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
+            checkGl();
+            glEnable(GL_DEPTH_TEST);
+            glClearColor(0.0, 0.0, 0.0, 0.0); // This will be interpreted as one integer, probably from the first component. I am putting it
+                                              // here anyway, to make it clear
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            checkGl();
+            glViewport(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y);
 
-    //         // except for the different resolution and shader program, this render pass is same as the final GCode render.
-    //         // what happens here is that all boxes of all lines are rendered, but only the visible ones will have their ids written into the
-    //         // framebuffer
-    //         glBindVertexArray(gcode::gcodeVAO);
-    //         glUseProgram(shaderProgram::visibility_program);
-    //         checkGl();
+            // except for the different resolution and shader program, this render pass is same as the final GCode render.
+            // what happens here is that all boxes of all lines are rendered, but only the visible ones will have their ids written into the
+            // framebuffer
+            glBindVertexArray(gcode::gcodeVAO);
+            glUseProgram(shaderProgram::visibility_program);
+            checkGl();
 
-    //         glActiveTexture(GL_TEXTURE0);
-    //         glBindTexture(GL_TEXTURE_BUFFER, path.positions_texture);
-    //         glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_BUFFER, path.positions_texture);
+            glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
 
-    //         glActiveTexture(GL_TEXTURE1);
-    //         glBindTexture(GL_TEXTURE_BUFFER, path.height_width_type_texture);
-    //         glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_type_buffer);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_BUFFER, path.height_width_type_texture);
+            glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_type_buffer);
 
-    //         glActiveTexture(GL_TEXTURE2);
-    //         glBindTexture(GL_TEXTURE_BUFFER, path.visibility_texture);
-    //         glTexBuffer(GL_TEXTURE_BUFFER, GL_R8, path.visibility_buffer);
+			glActiveTexture(GL_TEXTURE2);
+			glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
+			glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
 
-    //         glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
-    //         glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
-    //         // this tells the vertex shader to ignore visiblity values and render all lines instead
-    //         glUniform1i(globals::visibility_pass_location, true);
-    //         checkGl();
-    //         glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size,
-    //                               std::max(size_t(2), size_t((path.point_count - 1) * config::percentage_to_show)));
-    //         checkGl();
+            glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
+            glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
+            // this tells the vertex shader to ignore visiblity values and render all lines instead
+            glUniform1i(globals::visibility_pass_location, true);
+            checkGl();
+            size_t instances_to_render = path.enabled_segments_count * config::percentage_to_show;
+            if (instances_to_render > 0) {
+                glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size, instances_to_render);
+            }
+            checkGl();
 
-    //         glUseProgram(0);
-    //         glBindVertexArray(0);
-    //     }
+            glUseProgram(0);
+            glBindVertexArray(0);
+        }
 
-    //     if (iteration % 10 == 4) {
-    //         glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
-	// 		glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
-    //         glBufferData(GL_PIXEL_PACK_BUFFER, globals::visibilityResolution.x * globals::visibilityResolution.y * sizeof(unsigned int),
-    //                      nullptr, GL_STREAM_READ);
-	// 		glReadPixels(0,0, globals::visibilityResolution.x, globals::visibilityResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
-    //     }
+        if (iteration % 3 == 1) {
+            glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
+            // https://www.khronos.org/opengl/wiki/Buffer_Object_Streaming    buffer respecification
+            glBufferData(GL_PIXEL_PACK_BUFFER, globals::visibilityResolution.x * globals::visibilityResolution.y * sizeof(unsigned int),
+                         nullptr, GL_DYNAMIC_COPY);
+			glReadPixels(0,0, globals::visibilityResolution.x, globals::visibilityResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
+        }
 
-    //     if (iteration % 10 == 9) {
-    //         glBindBuffer(GL_TEXTURE_BUFFER, path.visibility_buffer);
-    //         // https://www.khronos.org/opengl/wiki/Buffer_Object_Streaming    buffer respecification
-    //         glBufferData(GL_TEXTURE_BUFFER, path.point_count * sizeof(bool), NULL, GL_STREAM_DRAW);
-    // 		glClearBufferData(GL_TEXTURE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, 0);
+        if (iteration % 3 == 2) {
+			size_t visible_ids_count = 0;
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
+            GLuint *visible_ids     = static_cast<GLuint *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_WRITE));
+            GLuint *visible_ids_end = std::next(visible_ids, (globals::visibilityResolution.x * globals::visibilityResolution.y));
+            if (visible_ids) {
+				GLuint* pre_new_end = std::unique(visible_ids, visible_ids_end);
+				std::sort(visible_ids, pre_new_end);
+				GLuint* new_end = std::unique(visible_ids, pre_new_end);
+				visible_ids_count = std::distance(visible_ids, new_end);
+            } else {
+                std::cout << "Could not map visiblity pixel buffer for read/write" << std::endl;
+            }
+            // Unmap the buffer object
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
-    //         // Map the buffer object into the client's memory space
-    //         GLubyte *visibility_data = static_cast<GLubyte *>(glMapBuffer(GL_TEXTURE_BUFFER, GL_WRITE_ONLY));
-
-    //         glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
-    //         GLuint *visible_ids = static_cast<GLuint *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
-
-    //         if (visibility_data && visible_ids) {
-    //             for (size_t i = 0; i < globals::visibilityResolution.x * globals::visibilityResolution.y; i++) {
-    //                 visibility_data[visible_ids[i]] = 1;
-    //             }
-    //         } else {
-    //             std::cout << "Something is terribly wrong" << std::endl;
-    //         }
-    //         // Unmap the buffer object
-    //         glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-    //         glUnmapBuffer(GL_TEXTURE_BUFFER);
-
-    //         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    //         glBindBuffer(GL_TEXTURE_BUFFER, 0);
-    //     }
-    // }
+            path.visible_segments_count = visible_ids_count;
+			std::swap(path.visible_segments_buffer, path.visibility_pixel_buffer);
+        }
+    }
 
     // Now render only the visible lines, with the expensive frag shader
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -333,15 +332,16 @@ void render(const gcode::BufferedPath& path, size_t iteration) {
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_type_buffer);
 
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
+    glBindTexture(GL_TEXTURE_BUFFER, path.visible_segments_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_segments_buffer);
 
     glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
     glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
     glUniform1i(globals::visibility_pass_location, false);
 
     checkGl();
-    glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size, path.enabled_segments_count);
+	if (path.visible_segments_count > 0)
+    	glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size, path.visible_segments_count);
     checkGl();
 
     glUseProgram(0);

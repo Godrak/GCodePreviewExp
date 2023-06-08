@@ -136,6 +136,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     // Create a buffer object and bind it to the texture buffer
     glGenBuffers(1, &result.visible_segments_buffer);
     glGenTextures(1, &result.enabled_segments_texture);
+    result.visible_segments_count = 0;
 	glGenBuffers(1, &result.visibility_pixel_buffer);
 
     glBindVertexArray(0);
