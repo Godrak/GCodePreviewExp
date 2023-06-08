@@ -8,7 +8,7 @@ layout(location = 0) in int vertex_id;
 
 layout(binding = 0) uniform samplerBuffer positionsTex;
 layout(binding = 1) uniform samplerBuffer heightWidthTypeTex;
-layout(binding = 2) uniform samplerBuffer visibilityTex;
+layout(binding = 2) uniform isamplerBuffer segmentIndexTex;
 
 out flat int id_a;
 out flat int id_b;
@@ -24,22 +24,8 @@ void main() {
     vec3 UP = vec3(0,0,1);
 
     // Retrieve the instance ID
-    id_a = int(gl_InstanceID);
-    id_b = int(gl_InstanceID) + 1;
-
-    // if not visilibty pass and neither of line endpoints visible, throw away. 
-    // (While it may seem confusing, it actually checks visibility of any point of the line, 
-    // since we set endpoint A to visible for any fragment that makes to the visiblity framebuffer)
-    if (visibility_pass == 0 && texelFetch(visibilityTex, id_a).r == 0 && texelFetch(visibilityTex, id_b).r == 0) {
-        gl_Position = vec4(0);
-        return;
-    }
-
-    // ngeative width means disconnection, drop this line
-    if (texelFetch(heightWidthTypeTex, id_a).y < 0 || texelFetch(heightWidthTypeTex, id_b).y < 0) {
-        gl_Position = vec4(0);
-        return;
-    }
+    id_a = int(texelFetch(segmentIndexTex, int(gl_InstanceID)).r);
+    id_b = id_a + 1;
 
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
     vec3 pos_b = texelFetch(positionsTex, id_b).xyz;

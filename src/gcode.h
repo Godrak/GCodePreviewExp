@@ -11,6 +11,7 @@
 
 #include "globals.h"
 #include <cstddef>
+#include <cstdint>
 #include <epoxy/gl_generated.h>
 #include <glm/fwd.hpp>
 #include <vector>
@@ -48,23 +49,33 @@ struct BufferedPath
 {
     GLuint positions_texture, positions_buffer;
     GLuint height_width_type_texture, height_width_type_buffer;
-    GLuint visibility_texture, visibility_buffer;
+    GLuint enabled_segments_texture, enabled_segments_buffer;
+    size_t enabled_segments_count;
+    GLuint visible_segments_texture, visible_segments_buffer;
+    size_t visible_segments_count;
     GLuint visibility_pixel_buffer;
     glm::ivec2 visibility_texture_size; 
-    size_t point_count;
 };
 
 BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     BufferedPath result;
-    result.point_count = path_points.size();
 
     std::vector<glm::vec3> positions;
     std::vector<glm::vec3> height_width_types;
+    std::vector<glm::uint32> enabled_segments;
 
     for (size_t i = 0; i < path_points.size(); i++) {
+        if (path_points[i].width < 0)
+            continue;
+    
+        if (i + 1 < path_points.size() && path_points[i + 1].width > 0) {
+            enabled_segments.push_back(positions.size());
+        }
         positions.push_back({path_points[i].pos_xy, path_points[i].pos_z});
         height_width_types.push_back({path_points[i].height, path_points[i].width, float(path_points[i].type)});
     }
+
+    result.enabled_segments_count = enabled_segments.size();
 
     glBindVertexArray(gcodeVAO);
 
@@ -104,28 +115,27 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
-
    // Create a buffer object and bind it to the texture buffer
-    glGenBuffers(1, &result.visibility_buffer);
-    glBindBuffer(GL_TEXTURE_BUFFER, result.visibility_buffer);
+    glGenBuffers(1, &result.enabled_segments_buffer);
+    glBindBuffer(GL_TEXTURE_BUFFER, result.enabled_segments_buffer);
 
     // buffer data to the path buffer
-    glBufferData(GL_TEXTURE_BUFFER, path_points.size() * sizeof(bool), NULL, GL_STREAM_DRAW);
-    bool v = 1;
-    glClearBufferData(GL_TEXTURE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, &v);
-
+    glBufferData(GL_TEXTURE_BUFFER, enabled_segments.size() * sizeof(glm::uint32), enabled_segments.data(), GL_STATIC_DRAW);
 
     // Create and bind the path texture
-    glGenTextures(1, &result.visibility_texture);
-    glBindTexture(GL_TEXTURE_BUFFER, result.visibility_texture);
+    glGenTextures(1, &result.enabled_segments_texture);
+    glBindTexture(GL_TEXTURE_BUFFER, result.enabled_segments_texture);
 
     // Attach the buffer object to the texture buffer
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R8, result.visibility_buffer);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, result.enabled_segments_buffer);
 
     // Unbind the buffer object and the texture buffer
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
+    // Create a buffer object and bind it to the texture buffer
+    glGenBuffers(1, &result.visible_segments_buffer);
+    glGenTextures(1, &result.enabled_segments_texture);
 	glGenBuffers(1, &result.visibility_pixel_buffer);
 
     glBindVertexArray(0);
