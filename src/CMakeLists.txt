@@ -3,7 +3,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 cmake_minimum_required(VERSION 3.8.4)
 
-find_package (glm REQUIRED PATHS glm NO_DEFAULT_PATH)
+find_package (glm REQUIRED PATHS glm/cmake NO_DEFAULT_PATH)
 
 file(GLOB_RECURSE GLAD_SOURCES "glad/src/glad.c" "glad/*.h")
 add_library(glad ${GLAD_SOURCES})
@@ -13,7 +13,6 @@ file(GLOB IMGUI_SOURCES "imgui/*.cpp" "imgui/*.h")
 add_library(imgui ${IMGUI_SOURCES})
 target_link_libraries(imgui PUBLIC glad)
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
-
 
 
 add_executable(GCdeView main.cpp)
