@@ -4,6 +4,7 @@
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
 #include "glad/glad.h"
+#include "globals.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_glfw.h"
@@ -44,7 +45,6 @@
 
 namespace glfwContext {
 GLFWwindow *window{nullptr};
-int         vsync{1};
 char        forth_back{' '};
 char        left_right{' '};
 char        up_down{' '};
@@ -70,9 +70,9 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
             break;
         }
         case GLFW_KEY_F3: {
-            vsync = 1 - vsync;
-            std::cout << "vsync: " << vsync << std::endl;
-            glfwSwapInterval(vsync);
+            config::vsync = 1 - config::vsync;
+            std::cout << "vsync: " << config::vsync << std::endl;
+            glfwSwapInterval(config::vsync);
             break;
         }
         case GLFW_KEY_F4: {
@@ -184,6 +184,7 @@ void show_config_window()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
     if (ImGui::Checkbox("with_visibility_pass", &config::with_visibility_pass)) {}
+    if (ImGui::Checkbox("vsync", &config::vsync)) {}
     ImGui::End();
     ImGui::PopStyleVar();
 }
@@ -289,8 +290,6 @@ private:
     }
 };
 
-float     lastTime;
-float     currentTime;
 glm::vec3 lastCameraPosition = camera::position;
 FilteringWorker filtering_worker{};
 
@@ -307,10 +306,6 @@ void switchConfiguration()
 
 void render(gcode::BufferedPath &path)
 {
-    currentTime = float(glfwGetTime());
-    checkGl();
-    auto delta = currentTime - lastTime;
-    lastTime   = currentTime;
     glfwGetFramebufferSize(glfwContext::window, &globals::screenResolution.x, &globals::screenResolution.y);
     checkGl();
     glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
@@ -395,7 +390,6 @@ void render(gcode::BufferedPath &path)
 
       
         if (path.status == gcode::VisibilityStatus::RENDERING && glfwGetTime() > path.time_render_started + path.time_to_render) {
-            
             glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
             double before_mapping = glfwGetTime();
             // Now here we synchornize with the visiblity render - if it did not finish yet, thread will stall here
@@ -406,7 +400,7 @@ void render(gcode::BufferedPath &path)
                 visible_ids_end = visible_ids;
             }
             double after_mapping = glfwGetTime();
-            path.time_to_render = path.time_to_render * 0.98 + (after_mapping - before_mapping);
+            path.time_to_render = path.time_to_render * 0.8 + (after_mapping - before_mapping);
             path.visiblity_vector.assign(visible_ids, visible_ids_end);
             path.filtering_future = filtering_worker.enqueue([](std::vector<glm::uint32>* vector_to_filter){
                 auto new_end = std::unique(vector_to_filter->begin(), vector_to_filter->end());
@@ -564,9 +558,6 @@ int main(int argc, char *argv[])
     // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
     // ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
     // IM_ASSERT(font != nullptr);
-
-    rendering::lastTime    = float(glfwGetTime());
-    rendering::currentTime = float(glfwGetTime());
 
     rendering::setup();
 
