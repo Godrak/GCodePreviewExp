@@ -11,6 +11,7 @@
 
 #include "globals.h"
 #include <cstddef>
+#include <future>
 #include <glm/fwd.hpp>
 #include <vector>
 #include <random>
@@ -43,16 +44,24 @@ struct PathPoint
     float width;
 };
 
+enum class VisibilityStatus {READY, RENDERING, FILTERING};
+
 struct BufferedPath
 {
     GLuint positions_texture, positions_buffer;
     GLuint height_width_type_texture, height_width_type_buffer;
     GLuint enabled_segments_texture, enabled_segments_buffer;
-    size_t enabled_segments_count;
+    size_t enabled_segments_count = 0;
     GLuint visible_segments_texture, visible_segments_buffer;
-    size_t visible_segments_count;
+    size_t visible_segments_count = 0;
     GLuint visibility_pixel_buffer;
     glm::ivec2 visibility_texture_size; 
+    
+    VisibilityStatus status = VisibilityStatus::READY;
+    double time_to_render = 0;
+    double time_render_started = 0;
+    std::vector<glm::uint32> visiblity_vector{};
+    std::future<void> filtering_future{};
 };
 
 BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
