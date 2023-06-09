@@ -1,8 +1,8 @@
 #ifndef GLOBALS_H_
 #define GLOBALS_H_
 
-#include "epoxy/gl.h"
-#include <epoxy/gl_generated.h>
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
 #include <iostream>

@@ -48,7 +48,7 @@ bool check_program(GLuint id, GLenum st) {
 	return (status == GL_TRUE);
 }
 
-void loadAndCompileShader(std::string source, GLuint& destination, GLenum type) {
+void loadAndCompileShader(const std::string& source, GLuint& destination, GLenum type) {
 	std::ifstream shaderSource(source);
 	std::string shaderCode;
 	getline(shaderSource, shaderCode, (char) shaderSource.eof());
@@ -61,10 +61,16 @@ void loadAndCompileShader(std::string source, GLuint& destination, GLenum type) 
 		exit(-1);
 }
 
+#if defined(USE_HARDCODED_PATHS)
+static const std::string shaders_path = "C:/prusa/references/GCodePreviewExp/win_glad/bin/";
+#else
+static const std::string shaders_path = "";
+#endif // USE_HARDCODED_PATHS
+
 void createGCodeProgram() {
-	loadAndCompileShader("gcode_shaders/v_shader.glsl", gcode_v_shader,
+	loadAndCompileShader(shaders_path + "gcode_shaders/v_shader.glsl", gcode_v_shader,
 	GL_VERTEX_SHADER);
-	loadAndCompileShader("gcode_shaders/f_shader.glsl", gcode_f_shader,
+	loadAndCompileShader(shaders_path + "gcode_shaders/f_shader.glsl", gcode_f_shader,
 	GL_FRAGMENT_SHADER);
 
 	gcode_program = glCreateProgram();
@@ -76,10 +82,10 @@ void createGCodeProgram() {
 }
 
 void createVisibilityProgram() {
-	loadAndCompileShader("gcode_shaders/v_shader.glsl", visibility_v_shader,
+	loadAndCompileShader(shaders_path + "gcode_shaders/v_shader.glsl", visibility_v_shader,
 	GL_VERTEX_SHADER);
-	loadAndCompileShader("gcode_shaders/vis_f_shader.glsl", visibility_f_shader,
-	GL_FRAGMENT_SHADER);
+	loadAndCompileShader(shaders_path + "gcode_shaders/vis_f_shader.glsl", visibility_f_shader,
+		GL_FRAGMENT_SHADER);
 
 	visibility_program = glCreateProgram();
 	glAttachShader(visibility_program, visibility_v_shader);
@@ -91,10 +97,10 @@ void createVisibilityProgram() {
 
 
 void createQuadProgram() {
-	loadAndCompileShader("gcode_shaders/quad_v_shader.glsl", quad_v_shader,
-	GL_VERTEX_SHADER);
-	loadAndCompileShader("gcode_shaders/quad_f_shader.glsl", quad_f_shader,
-	GL_FRAGMENT_SHADER);
+	loadAndCompileShader(shaders_path + "gcode_shaders/quad_v_shader.glsl", quad_v_shader,
+		GL_VERTEX_SHADER);
+	loadAndCompileShader(shaders_path + "gcode_shaders/quad_f_shader.glsl", quad_f_shader,
+		GL_FRAGMENT_SHADER);
 
 	quad_program = glCreateProgram();
 	glAttachShader(quad_program, quad_v_shader);
