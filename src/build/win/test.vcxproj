@@ -115,7 +115,7 @@ xcopy /i /e /s /y /f "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)/gcode_shad
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;USE_HARDCODED_PATHS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_NDEBUG;_CONSOLE;USE_HARDCODED_PATHS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>../../imgui;../../glad/include;../../glfw/include;../../glm</AdditionalIncludeDirectories>
     </ClCompile>
@@ -157,7 +157,7 @@ xcopy /i /e /s /y /f "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)/gcode_shad
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;USE_HARDCODED_PATHS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_NDEBUG;_CONSOLE;USE_HARDCODED_PATHS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>../../imgui;../../glad/include;../../glfw/include;../../glm</AdditionalIncludeDirectories>
     </ClCompile>
