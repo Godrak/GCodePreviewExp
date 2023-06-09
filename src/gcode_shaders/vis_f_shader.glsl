@@ -1,6 +1,6 @@
 #version 450
 
-out int visible_instance_id;
+out uint visible_instance_id;
 
 in flat int id_a;
 in flat int id_b;

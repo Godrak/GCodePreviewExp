@@ -20,20 +20,8 @@ void initializeColors() {
     colors[7] = vec3(0.0, 1.0, 0.0);
 }
 
-// Struct definition for PathPoint
-struct PathPoint {
-    vec2 pos_xy;
-    float pos_z;
-    int type;
-    float height;
-    float width;
-};
-
-// Binding point for the path data SSBO
-layout(std430, binding = 0) readonly buffer PathBuffer {
-    PathPoint points[];
-};
-
+layout(binding = 0) uniform samplerBuffer positionsTex;
+layout(binding = 1) uniform samplerBuffer heightWidthTypeTex;
 
 out vec4 fragmentColor;
 
@@ -68,13 +56,16 @@ void main() {
     initializeColors();
     // fragmentColor = vec4(colors[points[id_a].type], 1.0); return;
     
-    vec3 pos_a = vec3(points[id_a].pos_xy, points[id_a].pos_z);
-    vec3 pos_b = vec3(points[id_b].pos_xy, points[id_b].pos_z);
+    vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
+    vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
+    vec3 height_width_type_a = texelFetch(heightWidthTypeTex, id_a).xyz;
+    vec3 height_width_type_b = texelFetch(heightWidthTypeTex, id_b).xyz;
 
-    float half_height_a = 0.5* points[id_a].height;
-    float half_width_a = 0.5 * points[id_a].width;
-    float half_height_b = 0.5 * points[id_b].height;
-    float half_width_b = 0.5 * points[id_b].width;
+
+    float half_height_a = 0.5* height_width_type_a.x;
+    float half_width_a = 0.5 * height_width_type_a.y;
+    float half_height_b = 0.5 * height_width_type_b.x;
+    float half_width_b = 0.5 * height_width_type_a.y;
 
     vec3 radii_a = vec3(half_width_a, half_width_a, half_height_a);
     vec3 radii_b = vec3(half_width_b, half_width_b, half_height_b);
@@ -85,8 +76,8 @@ void main() {
     float line_len = length(pos_a-pos_b); 
     vec3 line = pos_b-pos_a;
 
-    vec3 color_a = colors[points[id_a].type];
-    vec3 color_b = colors[points[id_b].type];
+    vec3 color_a = colors[int(round(height_width_type_a.z))];
+    vec3 color_b = colors[int(round(height_width_type_b.z))];
     // ################################
     float limit = line_len + max(max(half_height_a, half_width_a), max(half_height_b, half_width_b));
     

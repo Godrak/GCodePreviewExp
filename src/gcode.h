@@ -18,7 +18,7 @@
 
 namespace gcode {
 GLuint gcodeVAO, vertexBuffer;
-GLuint visibilityFrameBuffer, instanceIdsTexture, depthTexture;
+GLuint visibilityFramebuffer, instanceIdsTexture, depthTexture;
 GLuint quadVAO;
 
 GLuint pathSSBObindPoint = 5;
@@ -34,7 +34,6 @@ int vertex_data[] = {
         0, 5, 6, // top side of box 
         0, 6, 1 };
 
-//https://stackoverflow.com/questions/38172696/should-i-ever-use-a-vec3-inside-of-a-uniform-buffer-or-shader-storage-buffer-o
 struct PathPoint
 {
     glm::vec2 pos_xy;
@@ -46,44 +45,97 @@ struct PathPoint
 
 struct BufferedPath
 {
-    GLuint path_buffer;
-    GLuint visibility_buffer;
-    size_t point_count;
+    GLuint positions_texture, positions_buffer;
+    GLuint height_width_type_texture, height_width_type_buffer;
+    GLuint enabled_segments_texture, enabled_segments_buffer;
+    size_t enabled_segments_count;
+    GLuint visible_segments_texture, visible_segments_buffer;
+    size_t visible_segments_count;
+    GLuint visibility_pixel_buffer;
+    glm::ivec2 visibility_texture_size; 
 };
+
 BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     BufferedPath result;
-    result.point_count = path_points.size(); 
+
+    std::vector<glm::vec3> positions;
+    std::vector<glm::vec3> height_width_types;
+    std::vector<glm::uint32> enabled_segments;
+
+    for (size_t i = 0; i < path_points.size(); i++) {
+        if (path_points[i].width < 0)
+            continue;
+    
+        if (i + 1 < path_points.size() && path_points[i + 1].width > 0) {
+            enabled_segments.push_back(positions.size());
+        }
+        positions.push_back({path_points[i].pos_xy, path_points[i].pos_z});
+        height_width_types.push_back({path_points[i].height, path_points[i].width, float(path_points[i].type)});
+    }
+
+    result.enabled_segments_count = enabled_segments.size();
 
     glBindVertexArray(gcodeVAO);
 
-    // Create and bind the SSBO
-    glGenBuffers(1, &result.path_buffer); checkGl();
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, result.path_buffer); checkGl();
+    // Create a buffer object and bind it to the texture buffer
+    glGenBuffers(1, &result.positions_buffer);
+    glBindBuffer(GL_TEXTURE_BUFFER, result.positions_buffer);
 
-    // Allocate memory for the SSBO
-    glBufferData(GL_SHADER_STORAGE_BUFFER, path_points.size() * sizeof(PathPoint), path_points.data(), GL_STATIC_DRAW);
-    checkGl();
+    // buffer data to the path buffer
+    glBufferData(GL_TEXTURE_BUFFER, positions.size() * sizeof(glm::vec3), positions.data(), GL_STATIC_DRAW);
 
-    // Bind the SSBO to an indexed buffer binding point
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, result.path_buffer); checkGl();
+    // Create and bind the path texture
+    glGenTextures(1, &result.positions_texture);
+    glBindTexture(GL_TEXTURE_BUFFER, result.positions_texture);
 
-    // Unbind the SSBO
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0); checkGl();
+    // Attach the buffer object to the texture buffer
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, result.positions_buffer);
 
-    // This section initializes the visibility SSBO that will store visible lines of the current frame. notice the GL_STREAM_DRAW     
-      // Create and bind the SSBO
-    glGenBuffers(1, &result.visibility_buffer); checkGl();
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, result.visibility_buffer); checkGl();
+    // Unbind the buffer object and the texture buffer
+    glBindBuffer(GL_TEXTURE_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_BUFFER, 0);
 
-    // Allocate memory for the SSBO
-    glBufferData(GL_SHADER_STORAGE_BUFFER, path_points.size() * sizeof(int), NULL, GL_STREAM_DRAW);
-    checkGl();
+     // Create a buffer object and bind it to the texture buffer
+    glGenBuffers(1, &result.height_width_type_buffer);
+    glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_type_buffer);
 
-    // Bind the SSBO to an indexed buffer binding point
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, result.visibility_buffer); checkGl();
+    // buffer data to the path buffer
+    glBufferData(GL_TEXTURE_BUFFER, height_width_types.size() * sizeof(glm::vec3), height_width_types.data(), GL_STATIC_DRAW);
 
-    // Unbind the SSBO
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0); checkGl();
+    // Create and bind the path texture
+    glGenTextures(1, &result.height_width_type_texture);
+    glBindTexture(GL_TEXTURE_BUFFER, result.height_width_type_texture);
+
+    // Attach the buffer object to the texture buffer
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, result.height_width_type_buffer);
+
+    // Unbind the buffer object and the texture buffer
+    glBindBuffer(GL_TEXTURE_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_BUFFER, 0);
+
+   // Create a buffer object and bind it to the texture buffer
+    glGenBuffers(1, &result.enabled_segments_buffer);
+    glBindBuffer(GL_TEXTURE_BUFFER, result.enabled_segments_buffer);
+
+    // buffer data to the path buffer
+    glBufferData(GL_TEXTURE_BUFFER, enabled_segments.size() * sizeof(glm::uint32), enabled_segments.data(), GL_STATIC_DRAW);
+
+    // Create and bind the path texture
+    glGenTextures(1, &result.enabled_segments_texture);
+    glBindTexture(GL_TEXTURE_BUFFER, result.enabled_segments_texture);
+
+    // Attach the buffer object to the texture buffer
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, result.enabled_segments_buffer);
+
+    // Unbind the buffer object and the texture buffer
+    glBindBuffer(GL_TEXTURE_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_BUFFER, 0);
+
+    // Create a buffer object and bind it to the texture buffer
+    glGenBuffers(1, &result.visible_segments_buffer);
+    glGenTextures(1, &result.enabled_segments_texture);
+    result.visible_segments_count = 0;
+	glGenBuffers(1, &result.visibility_pixel_buffer);
 
     glBindVertexArray(0);
 
@@ -117,18 +169,16 @@ void recreateVisibilityBufferOnResolutionChange()
     // Delete existing textures and framebuffer
     glDeleteTextures(1, &instanceIdsTexture);
     glDeleteTextures(1, &depthTexture);
-    glDeleteFramebuffers(1, &visibilityFrameBuffer);
+    glDeleteFramebuffers(1, &visibilityFramebuffer);
 
-    glGenFramebuffers(1, &visibilityFrameBuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, visibilityFrameBuffer);
+    glGenFramebuffers(1, &visibilityFramebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, visibilityFramebuffer);
 
     glActiveTexture(GL_TEXTURE1);
     glGenTextures(1, &instanceIdsTexture);
     glBindTexture(GL_TEXTURE_2D, instanceIdsTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32I, globals::visibilityResolution.x, globals::visibilityResolution.y, 0, GL_RED_INTEGER, GL_INT,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, globals::visibilityResolution.x, globals::visibilityResolution.y, 0, GL_RED_INTEGER, GL_UNSIGNED_INT,
                  nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, instanceIdsTexture, 0);
 
     checkGl();
@@ -138,10 +188,10 @@ void recreateVisibilityBufferOnResolutionChange()
     glBindTexture(GL_TEXTURE_2D, depthTexture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::visibilityResolution.x, globals::visibilityResolution.y, 0,
                  GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-    glNamedFramebufferTexture(visibilityFrameBuffer, GL_DEPTH_ATTACHMENT, depthTexture, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
 
     checkGl();
-    checkGLCall(glCheckNamedFramebufferStatus(visibilityFrameBuffer, GL_FRAMEBUFFER));
+    checkGLCall(glCheckFramebufferStatus(visibilityFramebuffer));
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -165,7 +215,7 @@ void init()
 
     glBindVertexArray(0);
 
-    glGenFramebuffers(1, &visibilityFrameBuffer);
+    glGenFramebuffers(1, &visibilityFramebuffer);
     glGenTextures(1, &instanceIdsTexture);
 	glGenTextures(1, &depthTexture);
     recreateVisibilityBufferOnResolutionChange();

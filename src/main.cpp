@@ -7,6 +7,7 @@
 #include "imgui_internal.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include <algorithm>
 #include <stdio.h>
 #define GL_SILENCE_DEPRECATION
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -226,6 +227,7 @@ namespace rendering {
     float lastTime;
     float currentTime;
     glm::vec3 lastCameraPosition = camera::position;
+    size_t iteration;
 
     void switchConfiguration() {
         if (config::geometryMode) {
@@ -236,80 +238,116 @@ namespace rendering {
         }
     }
 
-    void render(const gcode::BufferedPath& path) {
-        currentTime = float(glfwGetTime()); checkGl();
+    void render(gcode::BufferedPath &path)
+    {
+        currentTime = float(glfwGetTime());
+        checkGl();
         auto delta = currentTime - lastTime;
-        lastTime = currentTime;
-        glfwGetFramebufferSize(glfwContext::window, &globals::screenResolution.x, &globals::screenResolution.y); checkGl();
+        lastTime   = currentTime;
+        glfwGetFramebufferSize(glfwContext::window, &globals::screenResolution.x, &globals::screenResolution.y);
+        checkGl();
+        glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
+        checkGl();
 
-        glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y); checkGl();
-
-        camera::moveCamera(glfwContext::forth_back); checkGl();
-        camera::moveCamera(glfwContext::up_down); checkGl();
-        camera::moveCamera(glfwContext::left_right); checkGl();
-        camera::moveCamera(glfwContext::top_view); checkGl();
+        camera::moveCamera(glfwContext::forth_back);
+        checkGl();
+        camera::moveCamera(glfwContext::up_down);
+        checkGl();
+        camera::moveCamera(glfwContext::left_right);
+        checkGl();
+        camera::moveCamera(glfwContext::top_view);
+        checkGl();
 
         if (config::updateCameraPosition)
             lastCameraPosition = camera::position;
 
-        glm::mat4x4 view_projection = glm::mat4x4(1.0); checkGl();
+        glm::mat4x4 view_projection = glm::mat4x4(1.0);
+        checkGl();
         camera::applyViewTransform(view_projection);
         camera::applyProjectionTransform(view_projection);
 
         if (config::with_visibility_pass) {
-            // Visibility pass. This will store visible points IDs into the visibility framebuffer texture
-            // first, reset the visibility values
-            glBindBuffer(GL_SHADER_STORAGE_BUFFER, path.visibility_buffer);
-            glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32I, GL_RED_INTEGER, GL_INT, 0);
+            // Fire off a visiblity render pass into offscreen buffer
+            if (iteration % 3 == 0) {
+            auto new_vis_resolution = globals::screenResolution * 2;
+            if (new_vis_resolution != globals::visibilityResolution) {
+                globals::visibilityResolution = new_vis_resolution;
+                gcode::recreateVisibilityBufferOnResolutionChange();
+            }
 
             // bind visibility framebuffer, clear it and render all lines
-            glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFrameBuffer);
+            glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
             checkGl();
             glEnable(GL_DEPTH_TEST);
             glClearColor(0.0, 0.0, 0.0, 0.0); // This will be interpreted as one integer, probably from the first component. I am putting it
-                            // here anyway, to make it clear
+                                              // here anyway, to make it clear
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             checkGl();
             glViewport(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y);
 
             // except for the different resolution and shader program, this render pass is same as the final GCode render.
-            // what happens here is that all boxes of all lines are rendered, but only the visible ones will have their ids written into the framebuffer
+            // what happens here is that all boxes of all lines are rendered, but only the visible ones will have their ids written into the
+            // framebuffer
             glBindVertexArray(gcode::gcodeVAO);
             glUseProgram(shaderProgram::visibility_program);
             checkGl();
 
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, path.path_buffer); // Bind the SSBO to the indexed buffer binding point 0
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, path.visibility_buffer);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_BUFFER, path.positions_texture);
+            glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
+
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_BUFFER, path.height_width_type_texture);
+            glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_type_buffer);
+
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
+            glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
 
             glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
             glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
             // this tells the vertex shader to ignore visiblity values and render all lines instead
             glUniform1i(globals::visibility_pass_location, true);
             checkGl();
-            glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size,
-              std::max(size_t(2), size_t((path.point_count - 1) * config::percentage_to_show)));
+            size_t instances_to_render = path.enabled_segments_count * config::percentage_to_show;
+            if (instances_to_render > 0) {
+                glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size, instances_to_render);
+            }
             checkGl();
 
             glUseProgram(0);
             glBindVertexArray(0);
+            }
 
-            // now with the visibility texture filled with ids, we need to set the values in the visibility buffer to true for corresponding values
-            glBindVertexArray(gcode::quadVAO);
-            glUseProgram(shaderProgram::quad_program);
+            if (iteration % 3 == 1) {
+            glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
+            // https://www.khronos.org/opengl/wiki/Buffer_Object_Streaming    buffer respecification
+            glBufferData(GL_PIXEL_PACK_BUFFER, globals::visibilityResolution.x * globals::visibilityResolution.y * sizeof(unsigned int),
+                         nullptr, GL_DYNAMIC_COPY);
+            glReadPixels(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
+            }
 
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, path.visibility_buffer);
+            if (iteration % 3 == 2) {
+            size_t visible_ids_count = 0;
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
+            GLuint *visible_ids     = static_cast<GLuint *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_WRITE));
+            GLuint *visible_ids_end = std::next(visible_ids, (globals::visibilityResolution.x * globals::visibilityResolution.y));
+            if (visible_ids) {
+                GLuint *pre_new_end = std::unique(visible_ids, visible_ids_end);
+                std::sort(visible_ids, pre_new_end);
+                GLuint *new_end   = std::unique(visible_ids, pre_new_end);
+                visible_ids_count = std::distance(visible_ids, new_end);
+            } else {
+                std::cout << "Could not map visiblity pixel buffer for read/write" << std::endl;
+            }
+            // Unmap the buffer object
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, gcode::instanceIdsTexture);
-            glBindImageTexture(1 /*UNIT*/, gcode::instanceIdsTexture, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32I);
-
-            checkGl();
-
-            glDrawArrays(GL_TRIANGLES, 0, 6);
-
-            checkGl();
-            glUseProgram(0);
-            glBindVertexArray(0);
+            path.visible_segments_count = visible_ids_count;
+            std::swap(path.visible_segments_buffer, path.visibility_pixel_buffer);
+            }
         }
 
         // Now render only the visible lines, with the expensive frag shader
@@ -326,25 +364,35 @@ namespace rendering {
         glUseProgram(shaderProgram::gcode_program);
         checkGl();
 
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, path.path_buffer); // Bind the SSBO to the indexed buffer binding point 0
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, path.visibility_buffer);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_BUFFER, path.positions_texture);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
+
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_BUFFER, path.height_width_type_texture);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_type_buffer);
+
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_BUFFER, path.visible_segments_texture);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_segments_buffer);
 
         glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
         glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
         glUniform1i(globals::visibility_pass_location, false);
+
         checkGl();
-        glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size,
-            std::max(size_t(2), size_t((path.point_count - 1) * config::percentage_to_show)));
+        if (path.visible_segments_count > 0)
+            glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size, path.visible_segments_count);
         checkGl();
 
         glUseProgram(0);
         glBindVertexArray(0);
+        iteration++;
     }
 
     void setup() {
         shaderProgram::createGCodeProgram();
         shaderProgram::createVisibilityProgram();
-        shaderProgram::createQuadProgram();
         gcode::init();
         checkGl();
     }
