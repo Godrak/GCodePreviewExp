@@ -49,6 +49,8 @@ static void glfw_error_callback(int error, const char* description)
 
 static void glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
+    ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
+
     switch (action)
     {
     case GLFW_PRESS: {
@@ -151,16 +153,36 @@ static void glfw_key_callback(GLFWwindow* window, int key, int scancode, int act
 
 static void glfw_cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 {
-    glm::vec2 offset;
-    offset[0] = (float)(-xpos + last_xpos);
-    offset[1] = (float)(ypos - last_ypos);
-    offset *= 0.001f * camera::rotationSpeed;
-    camera::moveCamera(offset);
+    ImGui_ImplGlfw_CursorPosCallback(window, xpos, ypos);
+
+    const int ctrl_pressed = glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
+    if (!ctrl_pressed) {
+        glm::vec2 offset;
+        offset[0] = (float)(-xpos + last_xpos);
+        offset[1] = (float)(ypos - last_ypos);
+        offset *= 0.001f * camera::rotationSpeed;
+        camera::moveCamera(offset);
+    }
 
     last_xpos = xpos;
     last_ypos = ypos;
 }
 } // namespace glfwContext
+
+void show_config_window()
+{
+    int width, height;
+    glfwGetWindowSize(glfwContext::window, &width, &height);
+
+    ImGui::SetNextWindowPos({ (float)width, 0.0f }, ImGuiCond_Always, { 1.0, 0.0 });
+    ImGui::SetNextWindowBgAlpha(0.25f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+    if (ImGui::Checkbox("with_visibility_pass", &config::with_visibility_pass)) {
+    }
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
 
 // Reader function to load vector of PathPoints from a file
 static std::vector<gcode::PathPoint> readPathPoints(const std::string& filename)
@@ -413,7 +435,6 @@ int main(int argc, char* argv[])
     //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
     //IM_ASSERT(font != nullptr);
 
-
     rendering::lastTime = float(glfwGetTime());
     rendering::currentTime = float(glfwGetTime());
 
@@ -454,6 +475,7 @@ int main(int argc, char* argv[])
         ImGui::NewFrame();
 
         show_fps();
+        show_config_window();
         rendering::render(path);
 
         // Rendering
