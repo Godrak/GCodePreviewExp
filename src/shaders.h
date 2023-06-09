@@ -62,7 +62,7 @@ void loadAndCompileShader(const std::string& source, GLuint& destination, GLenum
 }
 
 #if defined(USE_HARDCODED_PATHS)
-static const std::string shaders_path = "C:/prusa/references/GCodePreviewExp/win_glad/bin/";
+static const std::string shaders_path = "C:/prusa/references/GCodePreviewExp/win_imgui_glfw_glad/bin/";
 #else
 static const std::string shaders_path = "";
 #endif // USE_HARDCODED_PATHS

@@ -170,8 +170,8 @@ xcopy /i /e /s /y /f "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)/gcode_shad
       <AdditionalDependencies>opengl32.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /i /e /s /y /f "$(SolutionDir)../../../data/*" "$(OutDir)/data"
-xcopy /i /e /s /y /f "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)/gcode_shaders"</Command>
+      <Command>xcopy /i /e /s /y /f "$(SolutionDir)../../../data/*" "$(OutDir)../../data"
+xcopy /i /e /s /y /f "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode_shaders"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
