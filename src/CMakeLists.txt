@@ -5,6 +5,9 @@ cmake_minimum_required(VERSION 3.8.4)
 
 find_package (glm REQUIRED PATHS glm/cmake NO_DEFAULT_PATH)
 
+find_package(TBB REQUIRED)
+include_directories(${TBB_INCLUDE_DIRS})
+
 file(GLOB_RECURSE GLAD_SOURCES "glad/src/glad.c" "glad/*.h")
 add_library(glad ${GLAD_SOURCES})
 target_include_directories(glad PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/glad/include)
@@ -16,7 +19,7 @@ target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 
 
 add_executable(GCdeView main.cpp)
-target_link_libraries(GCdeView PUBLIC glfw glad imgui)
+target_link_libraries(GCdeView PUBLIC glfw glad imgui tbb)
 target_compile_options(GCdeView PRIVATE -g)
 
 add_custom_target(Shaders ALL)

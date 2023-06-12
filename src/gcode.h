@@ -44,7 +44,7 @@ struct PathPoint
     float width;
 };
 
-enum class VisibilityStatus {READY, RENDERING, FILTERING};
+enum class VisibilityStatus {READY, RENDERING};
 
 struct BufferedPath
 {
