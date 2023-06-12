@@ -10,9 +10,22 @@ layout(binding = 0) uniform samplerBuffer positionsTex;
 layout(binding = 1) uniform samplerBuffer heightWidthTypeTex;
 layout(binding = 2) uniform isamplerBuffer segmentIndexTex;
 
+vec3 colors[8];
+void initializeColors() {
+    colors[0] = vec3(1.0, 0.5, 0.0);
+    colors[1] = vec3(1.0, 1.0, 0.0);
+    colors[2] = vec3(0.0, 0.0, 1.0);
+    colors[3] = vec3(0.0, 1.0, 1.0);
+    colors[4] = vec3(1.0, 0.0, 0.0);
+    colors[5] = vec3(1.0, 1.0, 1.0);
+    colors[6] = vec3(1.0, 0.0, 1.0);
+    colors[7] = vec3(0.0, 1.0, 0.0);
+}
+
 out flat int id_a;
 out flat int id_b;
 out vec3 pos;
+out vec3 color;
 
 
 float signDotABminusDotAC(vec3 A, vec3 B, vec3 C){
@@ -21,6 +34,8 @@ float signDotABminusDotAC(vec3 A, vec3 B, vec3 C){
 }
 
 void main() {
+    initializeColors();
+
     vec3 UP = vec3(0,0,1);
 
     // Retrieve the instance ID
@@ -75,7 +90,8 @@ void main() {
 
     // for visiblity pass, make the lines smaller, so that there are no holes in the result.
     float h = (visibility_pass == 1) ? 0.4 : 0.5;
-    vec2 sizes = texelFetch(heightWidthTypeTex, id_final).xy; 
+    vec3 height_width_type = texelFetch(heightWidthTypeTex, id_final).xyz;
+    vec2 sizes = height_width_type.xy; 
     float half_height = h * sizes.x;
     float half_width = h * sizes.y;
 
@@ -89,5 +105,7 @@ void main() {
 
     pos = texelFetch(positionsTex, id_final).xyz + cap + hsign * horizontal_dir + vsign * vertical_dir;
     gl_Position = view_projection * vec4(pos, 1.0);
+	
+    color = colors[int(round(height_width_type.z))];
 }
 

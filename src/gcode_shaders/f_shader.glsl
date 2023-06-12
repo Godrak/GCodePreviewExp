@@ -8,17 +8,6 @@
 layout(location = 0) uniform mat4 view_projection;
 layout(location = 1) uniform vec3 camera_position;
 
-vec3 colors[8];
-void initializeColors() {
-    colors[0] = vec3(1.0, 0.5, 0.0);
-    colors[1] = vec3(1.0, 1.0, 0.0);
-    colors[2] = vec3(0.0, 0.0, 1.0);
-    colors[3] = vec3(0.0, 1.0, 1.0);
-    colors[4] = vec3(1.0, 0.0, 0.0);
-    colors[5] = vec3(1.0, 1.0, 1.0);
-    colors[6] = vec3(1.0, 0.0, 1.0);
-    colors[7] = vec3(0.0, 1.0, 0.0);
-}
 
 layout(binding = 0) uniform samplerBuffer positionsTex;
 layout(binding = 1) uniform samplerBuffer heightWidthTypeTex;
@@ -28,6 +17,7 @@ out vec4 fragmentColor;
 in flat int id_a;
 in flat int id_b;
 in vec3 pos;
+in vec3 color;
 
 // Function to get the nearest point on a line segment
 vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 ab, out float t) {
@@ -52,10 +42,7 @@ vec3 calculateClosestPointOnEllipsoid(vec3 point, vec3 ellipsoidCenter, vec3 ell
     return closestPoint;
 }
 
-void main() {
-    initializeColors();
-    // fragmentColor = vec4(colors[points[id_a].type], 1.0); return;
-    
+void main() {    
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
     vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
     vec3 height_width_type_a = texelFetch(heightWidthTypeTex, id_a).xyz;
@@ -76,8 +63,6 @@ void main() {
     float line_len = length(pos_a-pos_b); 
     vec3 line = pos_b-pos_a;
 
-    vec3 color_a = colors[int(round(height_width_type_a.z))];
-    vec3 color_b = colors[int(round(height_width_type_b.z))];
     // ################################
     float limit = line_len + max(max(half_height_a, half_width_a), max(half_height_b, half_width_b));
     
@@ -105,8 +90,6 @@ void main() {
         last_depth = depth;
         iter++;
     }
-
-    vec3 color = mix(color_a, color_b, lt);
 
     vec3 normal = normalize(surface_point - last_center);
 
