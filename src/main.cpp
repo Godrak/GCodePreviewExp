@@ -590,6 +590,9 @@ int main(int argc, char *argv[])
         // two flags.
         glfwPollEvents();
 
+        if (glfwWindowShouldClose(window))
+            break;
+
         rendering::switchConfiguration();
 
         // Start the Dear ImGui frame
