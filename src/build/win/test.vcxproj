@@ -96,7 +96,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;USE_HARDCODED_PATHS="$(OutDir)../../";%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../imgui;../../glad/include;../../glfw/include;../../glm</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../imgui;../../glad/include;../../glfw/include;../../glm;../../tbb/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -117,7 +117,7 @@ xcopy /i /e /s /y /f "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_NDEBUG;_CONSOLE;USE_HARDCODED_PATHS="$(OutDir)../../";%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../imgui;../../glad/include;../../glfw/include;../../glm</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../imgui;../../glad/include;../../glfw/include;../../glm;../../tbb/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -138,17 +138,19 @@ xcopy /i /e /s /y /f "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;USE_HARDCODED_PATHS="$(OutDir)../../";%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../imgui;../../glad/include;../../glfw/include;../../glm</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../imgui;../../glad/include;../../glfw/include;../../glm;../../tbb/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>../../glfw/lib-vc2010-64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>../../glfw/lib-vc2010-64;../../tbb/lib/intel64/vc14;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>opengl32.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /i /e /s /y /f "$(SolutionDir)../../../data/*" "$(OutDir)../../data"
-xcopy /i /e /s /y /f "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode_shaders"</Command>
+      <Command>xcopy "$(SolutionDir)../../../data/*" "$(OutDir)../../data" /i /e /s /y /f 
+xcopy "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode_shaders" /i /e /s /y /f 
+xcopy "$(SolutionDir)../../tbb/redist/intel64/vc14/tbb12_debug.dll" "$(OutDir)" /i /e /s /y /f 
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -159,19 +161,20 @@ xcopy /i /e /s /y /f "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_NDEBUG;_CONSOLE;USE_HARDCODED_PATHS="$(OutDir)../../";%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../imgui;../../glad/include;../../glfw/include;../../glm</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../imgui;../../glad/include;../../glfw/include;../../glm;../../tbb/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>../../glfw/lib-vc2010-64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>../../glfw/lib-vc2010-64;../../tbb/lib/intel64/vc14;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>opengl32.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /i /e /s /y /f "$(SolutionDir)../../../data/*" "$(OutDir)../../data"
-xcopy /i /e /s /y /f "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode_shaders"</Command>
+      <Command>xcopy "$(SolutionDir)../../../data/*" "$(OutDir)../../data" /i /e /s /y /f 
+xcopy "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode_shaders" /i /e /s /y /f 
+xcopy "$(SolutionDir)../../tbb/redist/intel64/vc14/tbb12.dll" "$(OutDir)" /i /e /s /y /f </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
