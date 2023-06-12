@@ -227,6 +227,26 @@ static void show_fps()
     ImGui::PopStyleVar();
 }
 
+static void show_opengl()
+{
+    int width, height;
+    glfwGetWindowSize(glfwContext::window, &width, &height);
+
+    ImGui::SetNextWindowPos({ 0.0f, (float)height }, ImGuiCond_Always, { 0.0f, 1.0f });
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("##opengl", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+    const char* value = (const char*)::glGetString(GL_VERSION);
+    ImGui::Text("OpenGL version: %s", value);
+    int profile = 0;
+    glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &profile);
+    ImGui::SameLine();
+    ImGui::Text((profile == GL_CONTEXT_CORE_PROFILE_BIT) ? "Core" : "Compatibility");
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
 namespace rendering {
 
 class FilteringWorker
@@ -502,11 +522,12 @@ int main(int argc, char *argv[])
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); // 3.2+ only
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);           // Required on Mac
 #else
-    // GL 3.0 + GLSL 130
-    const char *glsl_version = "#version 130";
+    // GL 3.2 + GLSL 130
+    const char* glsl_version = "#version 130";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+//    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);  // 3.2+ only    
     // glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
 #endif
 
@@ -602,6 +623,7 @@ int main(int argc, char *argv[])
 
         show_fps();
         show_config_window();
+        show_opengl();
         rendering::render(path);
 
         // Rendering
