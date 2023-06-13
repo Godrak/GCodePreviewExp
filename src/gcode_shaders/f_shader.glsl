@@ -8,9 +8,8 @@
 layout(location = 0) uniform mat4 view_projection;
 layout(location = 1) uniform vec3 camera_position;
 
-
 layout(binding = 0) uniform samplerBuffer positionsTex;
-layout(binding = 1) uniform samplerBuffer heightWidthTypeTex;
+layout(binding = 1) uniform samplerBuffer heightWidthFlagsTex;
 
 out vec4 fragmentColor;
 
@@ -45,8 +44,8 @@ vec3 calculateClosestPointOnEllipsoid(vec3 point, vec3 ellipsoidCenter, vec3 ell
 void main() {    
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
     vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
-    vec3 height_width_type_a = texelFetch(heightWidthTypeTex, id_a).xyz;
-    vec3 height_width_type_b = texelFetch(heightWidthTypeTex, id_b).xyz;
+    vec3 height_width_type_a = texelFetch(heightWidthFlagsTex, id_a).xyz;
+    vec3 height_width_type_b = texelFetch(heightWidthFlagsTex, id_b).xyz;
 
 
     float half_height_a = 0.5* height_width_type_a.x;
