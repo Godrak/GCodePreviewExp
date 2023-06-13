@@ -177,21 +177,6 @@ static void glfw_cursor_position_callback(GLFWwindow *window, double xpos, doubl
 }
 } // namespace glfwContext
 
-void show_config_window()
-{
-    int width, height;
-    glfwGetWindowSize(glfwContext::window, &width, &height);
-
-    ImGui::SetNextWindowPos({(float) width, 0.0f}, ImGuiCond_Always, {1.0, 0.0});
-    ImGui::SetNextWindowBgAlpha(0.25f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
-    if (ImGui::Checkbox("with_visibility_pass", &config::with_visibility_pass)) {}
-    if (ImGui::Checkbox("vsync", &config::vsync)) {}
-    ImGui::End();
-    ImGui::PopStyleVar();
-}
-
 // Reader function to load vector of PathPoints from a file
 static std::vector<gcode::PathPoint> readPathPoints(const std::string &filename)
 {
