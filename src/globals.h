@@ -24,6 +24,7 @@ bool geometryMode = false;
 float percentage_to_show = 1.0;
 bool with_visibility_pass = true;
 bool vsync = true;
+int visualization_type = 0;
 
 }
 
