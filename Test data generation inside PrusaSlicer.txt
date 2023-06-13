@@ -1,0 +1,92 @@
+//=============================================================================================================================================
+CHANGES INTO: <>\src\slic3r\GUI\GCodeViewer.hpp
+//=============================================================================================================================================
+
+...
+
+class GCodeExporter
+{
+public:
+    static bool export_gcode(const GCodeProcessorResult& gcode_result);
+};
+
+...
+
+//=============================================================================================================================================
+CHANGES INTO: <>\src\slic3r\GUI\GCodeViewer.cpp
+//=============================================================================================================================================
+
+...
+
+#include <boost/filesystem.hpp>
+#include <boost/dll/runtime_symbol_info.hpp>
+
+...
+
+bool GCodeExporter::export_gcode(const GCodeProcessorResult& gcode_result)
+{
+    const boost::filesystem::path filename = boost::dll::program_location().parent_path().append("/gcode.gc");
+    std::ofstream file(filename.c_str(), std::ios::binary);
+    if (!file.is_open())
+        return false;
+
+    const size_t size = gcode_result.moves.size();
+    file.write(reinterpret_cast<const char*>(&size), sizeof(size));
+
+    for (size_t i = 0; i < gcode_result.moves.size(); ++i) {
+        const GCodeProcessorResult::MoveVertex& curr_v = gcode_result.moves[i];
+        if (curr_v.type != EMoveType::Extrude && curr_v.type != EMoveType::Travel)
+            continue;
+
+        assert(i > 0);
+
+        auto encode_flags = [](const GCodeProcessorResult::MoveVertex& v) {
+            unsigned int role;
+            if (v.type == EMoveType::Travel) {
+                enum class ETravelRole { Move, Extrude, Retract };
+                role = (v.delta_extruder == 0.0f) ? (unsigned int)ETravelRole::Move :
+                       (v.delta_extruder > 0.0f) ?  (unsigned int)ETravelRole::Extrude :
+                                                    (unsigned int)ETravelRole::Retract;
+            }
+            else
+                role = (unsigned int)v.extrusion_role;
+
+            unsigned int type = (unsigned int)v.type;
+            return role << 0 | type << 8;
+        };
+
+        auto write_move = [&file](const Vec3f& position, unsigned int flags, float height, float width) {
+            struct DataItem
+            {
+                Vec3f position;
+                unsigned int flags;
+                float height;
+                float width;
+            };
+            const DataItem item = { position, flags, height, width };
+            file.write(reinterpret_cast<const char*>(&item), sizeof(item));
+        };
+
+        const unsigned int flags = encode_flags(curr_v);
+        const GCodeProcessorResult::MoveVertex& prev_v = gcode_result.moves[i - 1];
+        if (prev_v.type != curr_v.type)
+            write_move(prev_v.position, flags, curr_v.height, curr_v.width);
+
+        write_move(curr_v.position, flags, curr_v.height, curr_v.width);
+    }
+
+    file.close();
+    return true;
+}
+
+
+void GCodeViewer::load(const GCodeProcessorResult& gcode_result, const Print& print)
+{
+
+...
+
+    GCodeExporter::export_gcode(gcode_result);
+
+...
+
+}
