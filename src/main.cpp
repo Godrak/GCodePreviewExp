@@ -177,21 +177,6 @@ static void glfw_cursor_position_callback(GLFWwindow *window, double xpos, doubl
 }
 } // namespace glfwContext
 
-void show_config_window()
-{
-    int width, height;
-    glfwGetWindowSize(glfwContext::window, &width, &height);
-
-    ImGui::SetNextWindowPos({(float) width, 0.0f}, ImGuiCond_Always, {1.0, 0.0});
-    ImGui::SetNextWindowBgAlpha(0.25f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
-    if (ImGui::Checkbox("with_visibility_pass", &config::with_visibility_pass)) {}
-    if (ImGui::Checkbox("vsync", &config::vsync)) {}
-    ImGui::End();
-    ImGui::PopStyleVar();
-}
-
 // Reader function to load vector of PathPoints from a file
 static std::vector<gcode::PathPoint> readPathPoints(const std::string &filename)
 {
@@ -230,6 +215,21 @@ static void show_fps()
     ImGui::PopStyleVar();
 }
 
+void show_config_window()
+{
+    int width, height;
+    glfwGetWindowSize(glfwContext::window, &width, &height);
+
+    ImGui::SetNextWindowPos({ (float)width, 0.0f }, ImGuiCond_Always, { 1.0, 0.0 });
+    ImGui::SetNextWindowBgAlpha(0.25f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+    if (ImGui::Checkbox("with_visibility_pass", &config::with_visibility_pass)) {}
+    if (ImGui::Checkbox("vsync", &config::vsync)) {}
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
 static void show_opengl()
 {
     int width, height;
@@ -245,6 +245,36 @@ static void show_opengl()
     glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &profile);
     ImGui::SameLine();
     ImGui::Text((profile == GL_CONTEXT_CORE_PROFILE_BIT) ? "Core" : "Compatibility");
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
+static void show_visualization_type()
+{
+    int width, height;
+    glfwGetWindowSize(glfwContext::window, &width, &height);
+
+    ImGui::SetNextWindowPos({ (float)width, (float)height }, ImGuiCond_Always, { 1.0f, 1.0f });
+    ImGui::SetNextWindowBgAlpha(0.25f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("##visualization_type", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+
+    const char* options[] = {
+        "Feature type",
+        "Height (mm)",
+        "Width (mm)",
+        "Speed (mm/s)",
+        "Fan speed (%)",
+        "Temperature (°C)",
+        "Volumetric flow rate (mm³/s)",
+        "Layer time (linear)",
+        "Layer time (logarithmic)",
+        "Tool",
+        "Color Print"
+    };
+
+    ImGui::Combo("##combo", &config::visualization_type, options, IM_ARRAYSIZE(options));
 
     ImGui::End();
     ImGui::PopStyleVar();
@@ -649,6 +679,8 @@ int main(int argc, char *argv[])
         show_fps();
         show_config_window();
         show_opengl();
+        show_visualization_type();
+
         rendering::render(path);
 
         // Rendering
