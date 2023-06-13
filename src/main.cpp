@@ -266,8 +266,8 @@ static void show_visualization_type()
         "Width (mm)",
         "Speed (mm/s)",
         "Fan speed (%)",
-        "Temperature (°C)",
-        "Volumetric flow rate (mm³/s)",
+        "Temperature (ï¿½C)",
+        "Volumetric flow rate (mmï¿½/s)",
         "Layer time (linear)",
         "Layer time (logarithmic)",
         "Tool",
@@ -286,8 +286,6 @@ class FilteringWorker
 {
 public:
     FilteringWorker() : stopFlag(false) { workerThread = std::thread(&FilteringWorker::workerThreadFunction, this); }
-
-    ~FilteringWorker() { stop(); }
 
     template<typename Callable, typename... Args>
     auto enqueue(Callable &&callable, Args &&...args) -> std::future<typename std::result_of<Callable(Args...)>::type>
@@ -695,6 +693,7 @@ int main(int argc, char *argv[])
 #endif
 
     // Cleanup
+    rendering::filtering_worker.stop();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

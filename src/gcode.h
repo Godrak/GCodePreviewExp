@@ -37,8 +37,7 @@ int vertex_data[] = {
 
 struct PathPoint
 {
-    glm::vec2 pos_xy;
-    float pos_z;
+    glm::vec3 position;
     unsigned int flags;
     float height;
     float width;
@@ -78,13 +77,10 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     std::vector<glm::uint32> enabled_segments;
 
     for (size_t i = 0; i < path_points.size(); i++) {
-        if (path_points[i].width < 0)
-            continue;
-    
-        if (i + 1 < path_points.size() && path_points[i + 1].width > 0) {
+        if (i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position) {
             enabled_segments.push_back(positions.size());
         }
-        positions.push_back({path_points[i].pos_xy, path_points[i].pos_z});
+        positions.push_back({path_points[i].position});
         const unsigned int type = path_points[i].decode_type_from_flags();
         const float height = (type == 8) ? 0.1f : path_points[i].height;
         const float width  = (type == 8) ? 0.1f : path_points[i].width;
@@ -168,15 +164,14 @@ BufferedPath generateTestingPathPoints()
     std::uniform_real_distribution<float> sizeDist(0.05f, 2.0f);        // Random size distribution
     std::uniform_real_distribution<float> diffDistance(-50.0f, 50.0f);   // Random size distribution
 
-    glm::vec2 last_point = glm::vec2(diffDistance(rng), diffDistance(rng)); 
+    glm::vec3 last_point = glm::vec3(diffDistance(rng), diffDistance(rng), 0); 
     for (int i = 0; i < 50; ++i) {
         PathPoint point;
-        point.pos_xy = last_point + glm::vec2(diffDistance(rng), diffDistance(rng));
-        point.pos_z = 0;
+        point.position = last_point + glm::vec3(diffDistance(rng), diffDistance(rng), 0);
         point.encode_flags(1 + rand() % 12, 10); // role = Random extrusion role, type = Extrude
         point.height = sizeDist(rng);            // Random height between 1.0 and 5.0
         point.width  = 2.0*sizeDist(rng);        // Random width between 1.0 and 5.0
-        last_point = point.pos_xy;
+        last_point = point.position;
         pathPoints.push_back(point);
     }
 
