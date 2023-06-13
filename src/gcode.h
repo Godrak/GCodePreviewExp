@@ -39,9 +39,13 @@ struct PathPoint
 {
     glm::vec2 pos_xy;
     float pos_z;
-    int type;
+    unsigned int flags;
     float height;
     float width;
+
+    unsigned int encode_flags(unsigned int role, unsigned int type) { flags = role << 0 | type << 8; return flags; }
+    unsigned int decode_role_from_flags() const { return flags & 0xFF; }
+    unsigned int decode_type_from_flags() const { return (flags >> 8) & 0xFF; }
 };
 
 enum class VisibilityStatus {READY, RENDERING};
@@ -64,11 +68,13 @@ struct BufferedPath
     std::future<void> filtering_future{};
 };
 
+static unsigned int extract_type_from_flags(unsigned int flags) { return (flags >> 8) & 0xFF; }
+
 BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     BufferedPath result;
 
     std::vector<glm::vec3> positions;
-    std::vector<glm::vec3> height_width_types;
+    std::vector<glm::vec3> height_width_flags;
     std::vector<glm::uint32> enabled_segments;
 
     for (size_t i = 0; i < path_points.size(); i++) {
@@ -79,7 +85,11 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
             enabled_segments.push_back(positions.size());
         }
         positions.push_back({path_points[i].pos_xy, path_points[i].pos_z});
-        height_width_types.push_back({path_points[i].height, path_points[i].width, float(path_points[i].type)});
+        const unsigned int type = path_points[i].decode_type_from_flags();
+        const float height = (type == 8) ? 0.1f : path_points[i].height;
+        const float width  = (type == 8) ? 0.1f : path_points[i].width;
+
+        height_width_flags.push_back({ height, width, float(path_points[i].flags) });
     }
 
     result.enabled_segments_count = enabled_segments.size();
@@ -109,7 +119,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_type_buffer);
 
     // buffer data to the path buffer
-    glBufferData(GL_TEXTURE_BUFFER, height_width_types.size() * sizeof(glm::vec3), height_width_types.data(), GL_STATIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, height_width_flags.size() * sizeof(glm::vec3), height_width_flags.data(), GL_STATIC_DRAW);
 
     // Create and bind the path texture
     glGenTextures(1, &result.height_width_type_texture);
@@ -163,9 +173,9 @@ BufferedPath generateTestingPathPoints()
         PathPoint point;
         point.pos_xy = last_point + glm::vec2(diffDistance(rng), diffDistance(rng));
         point.pos_z = 0;
-        point.type  = rand()%8; // Random color
-        point.height = sizeDist(rng);                                             // Random height between 1.0 and 5.0
-        point.width  = 2.0*sizeDist(rng);                                             // Random width between 1.0 and 5.0
+        point.encode_flags(1 + rand() % 12, 10); // role = Random extrusion role, type = Extrude
+        point.height = sizeDist(rng);            // Random height between 1.0 and 5.0
+        point.width  = 2.0*sizeDist(rng);        // Random width between 1.0 and 5.0
         last_point = point.pos_xy;
         pathPoints.push_back(point);
     }
