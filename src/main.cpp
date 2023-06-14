@@ -341,6 +341,19 @@ private:
     }
 };
 
+static size_t hope_unique(uint32_t *out, size_t len) {
+    if(len ==  0) return 0; // duh!
+    size_t pos = 1;
+    uint32_t oldv = out[0];
+    for (size_t i = 1; i < len; ++i) {
+        uint32_t newv = out[i];
+        out[pos] = newv;
+        pos += (newv != oldv);
+        oldv = newv;
+    }
+    return pos;
+}
+
 glm::vec3 lastCameraPosition = camera::position;
 FilteringWorker filtering_worker{};
 
@@ -468,10 +481,22 @@ void render(gcode::BufferedPath &path)
             path.visiblity_vector.assign(visible_ids, visible_ids_end);
             path.filtering_future = filtering_worker.enqueue(
                 [](std::vector<glm::uint32> *vector_to_filter) {
-                    auto new_end = std::unique(vector_to_filter->begin(), vector_to_filter->end());
-                    tbb::parallel_sort(vector_to_filter->begin(), new_end);
-                    auto final_end = std::unique(vector_to_filter->begin(), new_end);
-                    vector_to_filter->erase(final_end, vector_to_filter->end());
+#ifdef TIMINGS
+                    std::cout << "F1 " << glfwGetTime() << std::endl;
+#endif
+                    auto new_len = hope_unique(&vector_to_filter->front(), vector_to_filter->size());
+#ifdef TIMINGS
+                    std::cout << "F2 " << glfwGetTime() << std::endl;
+#endif
+                    tbb::parallel_sort(vector_to_filter->begin(), vector_to_filter->begin() + new_len);
+#ifdef TIMINGS
+                    std::cout << "F3 " << glfwGetTime() << std::endl;
+#endif
+                    auto final_end = hope_unique(&vector_to_filter->front(), new_len);
+#ifdef TIMINGS
+                    std::cout << "F4 " << glfwGetTime() << std::endl;
+#endif
+                    vector_to_filter->erase(vector_to_filter->begin() + final_end, vector_to_filter->end());
                 },
                 &path.visiblity_vector);
 #ifdef TIMINGS

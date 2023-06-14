@@ -92,14 +92,17 @@ void main() {
 
     vec3 normal = normalize(surface_point - last_center);
 
+    vec3 light_top_dir = vec3(-0.4574957, 0.4574957, 0.7624929);
+    float light_top_diffuse = 0.6*0.8;
 
-    vec3 lightColor = vec3(1.0, 1.0, 1.0); // Light color (white)
+    vec3 light_front_dir = vec3(-0.4574957, 0.4574957, 0.7624929);
+    float light_front_diffuse = 0.6*0.3;
 
-    vec3 lightDirection = normalize(vec3(0.0, 0.0, 1.0)); // Light direction (assuming (0, 0, 1) for simplicity)
+    float ambient = 0.3;
 
-    float diffuseFactor = max(dot(normal, lightDirection), 0.0);
-    float diffuseFactor2 = max(dot(normal, -lightDirection), 0.0);
-    vec3 diffuse = color * lightColor * (diffuseFactor + diffuseFactor2);
+    float diffuseFactor = max(dot(normal, light_top_dir), 0.0);
+    float diffuseFactor2 = max(dot(normal, -light_front_dir), 0.0);
+    vec3 diffuse = color * (ambient + light_top_diffuse * diffuseFactor + light_front_diffuse * diffuseFactor2);
 
     vec4 clip = view_projection * vec4(surface_point, 1.0);
 
