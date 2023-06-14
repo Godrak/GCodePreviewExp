@@ -26,6 +26,7 @@ size_t visible_segments_count = 0;
 bool with_visibility_pass = true;
 bool vsync = true;
 int visualization_type = 0;
+bool window_minimized = false;
 
 }
 
