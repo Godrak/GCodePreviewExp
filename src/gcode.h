@@ -167,10 +167,10 @@ BufferedPath generateTestingPathPoints()
     glm::vec3 last_point = glm::vec3(diffDistance(rng), diffDistance(rng), 0); 
     for (int i = 0; i < 50; ++i) {
         PathPoint point;
-        point.position = last_point + glm::vec3(diffDistance(rng), diffDistance(rng), 0);
+        point.position = last_point + glm::vec3(diffDistance(rng), diffDistance(rng), diffDistance(rng));
         point.encode_flags(1 + rand() % 12, 10); // role = Random extrusion role, type = Extrude
         point.height = sizeDist(rng);            // Random height between 1.0 and 5.0
-        point.width  = 2.0*sizeDist(rng);        // Random width between 1.0 and 5.0
+        point.width  = point.height;//2.0*sizeDist(rng);        // Random width between 1.0 and 5.0
         last_point = point.position;
         pathPoints.push_back(point);
     }

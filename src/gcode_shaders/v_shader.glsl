@@ -50,12 +50,6 @@ out flat int id_b;
 out vec3 pos;
 out vec3 color;
 
-
-float signDotABminusDotAC(vec3 A, vec3 B, vec3 C){
-    // sign(dot(A, B) - dot(A, C)) = sign((B.x - C.x) * A.x + (B.y - C.y) * A.y + (B.z - C.z) * A.z)
-    return sign((B.x - C.x) * A.x + (B.y - C.y) * A.y + (B.z - C.z) * A.z);
-}
-
 void main() {
     vec3 UP = vec3(0,0,1);
 
@@ -85,7 +79,15 @@ void main() {
     }else {
         line_dir = line / line_len;
     }
-    vec3 right_dir = normalize(cross(line_dir, UP));
+    vec3 right_dir;
+    if (abs(dot(line_dir, UP)) > 0.9) {
+        // For vertical lines, the width and height should be same, there is no concept of up and down.
+        // For simplicity, the code will expand width in the x axis, and height in the y axis 
+        right_dir = normalize(cross(vec3(1,0,0), line_dir));
+    } else {
+        right_dir = normalize(cross(line_dir, UP));
+    }
+
     vec3 up_dir = normalize(cross(right_dir, line_dir));
 
     int id_close = id_a;
@@ -120,8 +122,8 @@ void main() {
     float cap_sign = vertex_id < 4 ? -1.0 : 1.0;
     vec3 cap = half_width * line_dir * dir_sign * cap_sign;
 
-    vec3 horizontal_dir = half_width * right_dir * signDotABminusDotAC(camera_right_dir_nn, view_b, view_a);
-    vec3 vertical_dir = half_height * up_dir * dir_sign * signDotABminusDotAC(camera_up_dir_nn, view_b, view_a);
+    vec3 horizontal_dir = half_width * right_dir * -sign(dot(view_a, right_dir));
+    vec3 vertical_dir = half_height * up_dir * -sign(dot(view_a, up_dir));
 
     pos = texelFetch(positionsTex, id_final).xyz + cap + hsign * horizontal_dir + vsign * vertical_dir;
     gl_Position = view_projection * vec4(pos, 1.0);
