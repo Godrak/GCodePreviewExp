@@ -12,6 +12,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
+#include <cstddef>
 #include <tbb/tbb.h>
 #include <tbb/parallel_sort.h>
 
@@ -439,17 +440,68 @@ void render(gcode::BufferedPath &path)
     camera::applyProjectionTransform(view_projection);
 
     if (config::with_visibility_pass) {
-        if (path.status == gcode::VisibilityStatus::READY) {
-#ifdef TIMINGS
-            std::cout << "RENDERING START " << glfwGetTime() << std::endl;
-#endif
-            // Fire off a visiblity render pass into offscreen buffer
+        GLint rendering_sync_status;
+        glGetSynciv(path.rendering_sync_fence, GL_SYNC_STATUS, sizeof(GLint), nullptr, &rendering_sync_status);
+        GLint buffering_sync_status;
+        glGetSynciv(path.buffering_sync_fence, GL_SYNC_STATUS, sizeof(GLint), nullptr, &buffering_sync_status);
+
+        if (rendering_sync_status == GL_SIGNALED && buffering_sync_status == GL_SIGNALED &&
+            (!path.filtering_future.valid() || path.filtering_future.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready)) {
+            
+            // update resolution if needed
             auto new_vis_resolution = globals::screenResolution * 2;
             if (new_vis_resolution != globals::visibilityResolution) {
                 globals::visibilityResolution = new_vis_resolution;
                 gcode::recreateVisibilityBufferOnResolutionChange();
+                glBufferData(GL_PIXEL_PACK_BUFFER, globals::visibilityResolution.x * globals::visibilityResolution.y * sizeof(unsigned int),
+                             0, GL_STREAM_READ);
             }
 
+#ifdef TIMINGS
+            std::cout << "BUFFERING START " << glfwGetTime() << std::endl;
+#endif
+
+            // START BUFFERING DATA WHICH ARE READY
+            // first buffer is used for the final rendering of visble lines, second for buffering
+            std::swap(path.visible_segments_doublebuffer.first, path.visible_segments_doublebuffer.second);
+            std::swap(path.visible_segments_counts.first, path.visible_segments_counts.second);
+            glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_doublebuffer.second);
+            glBufferData(GL_TEXTURE_BUFFER, path.visible_segments_counts.second * sizeof(glm::uint32), nullptr, GL_STREAM_DRAW);
+            glBufferData(GL_TEXTURE_BUFFER, path.visiblity_vector.size() * sizeof(glm::uint32), path.visiblity_vector.data(), GL_STREAM_DRAW);
+            path.visible_segments_counts.second = path.visiblity_vector.size();
+            path.buffering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+
+
+#ifdef TIMINGS
+            std::cout << "FILTERING START " << glfwGetTime() << std::endl;
+#endif
+
+            //FILTERING DATA
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
+            double before_mapping = glfwGetTime();
+            // Now here we synchornize with the visiblity render - if it did not finish yet, thread will stall here
+            GLuint *visible_ids     = static_cast<GLuint *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
+            GLuint *visible_ids_end = std::next(visible_ids, (globals::visibilityResolution.x * globals::visibilityResolution.y));
+            if (!visible_ids) {
+                std::cout << "Unable to map visibility pixel buffer!" << std::endl;
+                visible_ids_end = visible_ids;
+            }
+            path.visiblity_vector.assign(visible_ids, visible_ids_end);
+            path.filtering_future = filtering_worker.enqueue(
+                [](std::vector<glm::uint32> *vector_to_filter) {
+                    auto new_len = hope_unique(&vector_to_filter->front(), vector_to_filter->size());
+                    tbb::parallel_sort(vector_to_filter->begin(), vector_to_filter->begin() + new_len);
+                    auto final_end = hope_unique(&vector_to_filter->front(), new_len);
+                    vector_to_filter->erase(vector_to_filter->begin() + final_end, vector_to_filter->end());
+                },
+                &path.visiblity_vector);
+
+
+#ifdef TIMINGS
+            std::cout << "RENDERING START " << glfwGetTime() << std::endl;
+#endif
+
+            // VISBILITY RENDERING EXECUTION
             glm::mat4x4 visiblity_view_projection = view;
             camera::applyVisibilityProjectionTransform(visiblity_view_projection);
 
@@ -498,57 +550,15 @@ void render(gcode::BufferedPath &path)
             // Due to usage of PIXEL_PACK_BUFFER this should NOT be blocking call, it just tells OpenGL to stream the pixels into the buffer
             glReadPixels(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
 
+            path.rendering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+
             glUseProgram(0);
             glBindVertexArray(0);
 
-#ifdef TIMINGS
-            std::cout << "RENDERING EXECUTED " << glfwGetTime() << std::endl;
-#endif
-            path.status = gcode::VisibilityStatus::RENDERING;
-            path.time_render_started = glfwGetTime();
-        }
 
-        if (path.status == gcode::VisibilityStatus::RENDERING && glfwGetTime() > path.time_render_started + path.time_to_render &&
-            !path.filtering_future.valid()) {
 #ifdef TIMINGS
-            std::cout << "READING PIXELS START " << glfwGetTime() << std::endl;
+            std::cout << "VISIBILITY DONE " << glfwGetTime() << std::endl;
 #endif
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
-            double before_mapping = glfwGetTime();
-            // Now here we synchornize with the visiblity render - if it did not finish yet, thread will stall here
-            GLuint *visible_ids     = static_cast<GLuint *>(glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
-            GLuint *visible_ids_end = std::next(visible_ids, (globals::visibilityResolution.x * globals::visibilityResolution.y));
-            if (!visible_ids) {
-                std::cout << "Unable to map visibility pixel buffer!" << std::endl;
-                visible_ids_end = visible_ids;
-            }
-            double after_mapping = glfwGetTime();
-            path.time_to_render  = path.time_to_render * 0.8 + (after_mapping - before_mapping);
-            path.visiblity_vector.assign(visible_ids, visible_ids_end);
-            path.filtering_future = filtering_worker.enqueue(
-                [](std::vector<glm::uint32> *vector_to_filter) {
-#ifdef TIMINGS
-                    std::cout << "F1 " << glfwGetTime() << std::endl;
-#endif
-                    auto new_len = hope_unique(&vector_to_filter->front(), vector_to_filter->size());
-#ifdef TIMINGS
-                    std::cout << "F2 " << glfwGetTime() << std::endl;
-#endif
-                    tbb::parallel_sort(vector_to_filter->begin(), vector_to_filter->begin() + new_len);
-#ifdef TIMINGS
-                    std::cout << "F3 " << glfwGetTime() << std::endl;
-#endif
-                    auto final_end = hope_unique(&vector_to_filter->front(), new_len);
-#ifdef TIMINGS
-                    std::cout << "F4 " << glfwGetTime() << std::endl;
-#endif
-                    vector_to_filter->erase(vector_to_filter->begin() + final_end, vector_to_filter->end());
-                },
-                &path.visiblity_vector);
-#ifdef TIMINGS
-            std::cout << "READING PIXELS FINISH " << glfwGetTime() << std::endl;
-#endif
-            path.status = gcode::VisibilityStatus::READY;
         }
     }
 
@@ -576,32 +586,19 @@ void render(gcode::BufferedPath &path)
 
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_BUFFER, path.visible_segments_texture);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_segments_buffer);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_segments_doublebuffer.first);
 
     glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
     glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
     glUniform1i(globals::visibility_pass_location, false);
 
     checkGl();
-    if (path.visible_segments_count > 0)
-        glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size, path.visible_segments_count);
+    if (path.visible_segments_counts.first > 0)
+        glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size, path.visible_segments_counts.first);
     checkGl();
 
     glUseProgram(0);
     glBindVertexArray(0);
-
-    if (path.filtering_future.valid() && path.filtering_future.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready) {
-#ifdef TIMINGS
-        std::cout << "FILTERING FINISHED, BUFFERING " << glfwGetTime() << std::endl;
-#endif
-        glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_buffer);
-        glBufferData(GL_TEXTURE_BUFFER, path.visiblity_vector.size() * sizeof(glm::uint32), path.visiblity_vector.data(), GL_STREAM_DRAW);
-        path.visible_segments_count = path.visiblity_vector.size();
-        path.filtering_future       = {};
-#ifdef TIMINGS
-        std::cout << "BUFFERED " << glfwGetTime() << std::endl;
-#endif
-    }
 }
 
 void setup()

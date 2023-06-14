@@ -9,6 +9,7 @@
 #ifndef GCODE_H_
 #define GCODE_H_
 
+#include "glad/glad.h"
 #include "globals.h"
 #include <cstddef>
 #include <future>
@@ -55,16 +56,16 @@ struct BufferedPath
     GLuint height_width_type_texture, height_width_type_buffer;
     GLuint enabled_segments_texture, enabled_segments_buffer;
     size_t enabled_segments_count = 0;
-    GLuint visible_segments_texture, visible_segments_buffer;
-    size_t visible_segments_count = 0;
+    GLuint visible_segments_texture;
+    std::pair<GLuint, GLuint> visible_segments_doublebuffer;
+    std::pair<size_t, size_t> visible_segments_counts = {0,0};
     GLuint visibility_pixel_buffer;
     glm::ivec2 visibility_texture_size; 
     
-    VisibilityStatus status = VisibilityStatus::READY;
-    double time_to_render = 0;
-    double time_render_started = 0;
     std::vector<glm::uint32> visiblity_vector{};
     std::future<void> filtering_future{};
+    GLsync rendering_sync_fence;
+    GLsync buffering_sync_fence;
 };
 
 static unsigned int extract_type_from_flags(unsigned int flags) { return (flags >> 8) & 0xFF; }
@@ -147,10 +148,13 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
     // Create a buffer object and bind it to the texture buffer
-    glGenBuffers(1, &result.visible_segments_buffer);
+    glGenBuffers(1, &result.visible_segments_doublebuffer.first);
+    glGenBuffers(1, &result.visible_segments_doublebuffer.second);
     glGenTextures(1, &result.enabled_segments_texture);
-    result.visible_segments_count = 0;
 	glGenBuffers(1, &result.visibility_pixel_buffer);
+
+    result.rendering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    result.buffering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 
     glBindVertexArray(0);
 
