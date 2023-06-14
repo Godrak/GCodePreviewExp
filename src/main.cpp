@@ -4,23 +4,31 @@
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
 #include "glad/glad.h"
+
 #include "globals.h"
+
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+
 #include <tbb/tbb.h>
-#include "tbb/parallel_sort.h"
+#include <tbb/parallel_sort.h>
+
 #include <GLFW/glfw3.h>
+
 #include <algorithm>
 #include <chrono>
 #include <future>
 #include <mutex>
-#include <oneapi/tbb/parallel_sort.h>
 #include <stdio.h>
 #include <thread>
 #include <vector>
 #include <queue>
+#include <fstream>
+
+#include <glm/gtc/type_ptr.hpp>
+
 #define GL_SILENCE_DEPRECATION
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <GLES2/gl2.h>
@@ -39,12 +47,16 @@
 #include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
 
-#include <fstream>
-
 #include "camera.h"
 #include "gcode.h"
 #include "shaders.h"
-#include <glm/gtc/type_ptr.hpp>
+
+// std::clamp requires c++17
+template <typename T>
+static float clamp(const T& value, const T& min, const T& max) {
+  return (value < min) ? min :
+         (max < value) ? max : value;
+}
 
 namespace glfwContext {
 GLFWwindow *window{nullptr};
@@ -64,10 +76,6 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
     switch (action) {
     case GLFW_PRESS: {
         switch (key) {
-        case GLFW_KEY_ESCAPE: {
-            glfwSetWindowShouldClose(window, 1);
-            break;
-        }
         case GLFW_KEY_F2: {
             config::geometryMode = 1 - config::geometryMode;
             break;
@@ -119,6 +127,16 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
             camera::stepSize *= 0.5f;
             break;
         }
+        case GLFW_KEY_LEFT: {
+            const size_t offset = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1;
+            config::visible_segments_count = (size_t)clamp<int>((int)config::visible_segments_count - (int)offset, 1, (int)config::total_segments_count);
+            break;
+        }
+        case GLFW_KEY_RIGHT: {
+            const size_t offset = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1;
+            config::visible_segments_count = clamp<size_t>(config::visible_segments_count + offset, 1, config::total_segments_count);
+            break;
+        }
         }
         break;
     }
@@ -154,8 +172,7 @@ static void glfw_cursor_position_callback(GLFWwindow *window, double xpos, doubl
     ImGui_ImplGlfw_CursorPosCallback(window, xpos, ypos);
 
     if (!ImGui::GetIO().WantCaptureMouse) {
-        const int shift_pressed = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT);
-        if (!shift_pressed) {
+        if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL)) {
             glm::vec2 offset;
             offset[0] = (float)(-xpos + last_xpos);
             offset[1] = (float)(ypos - last_ypos);
@@ -285,13 +302,21 @@ void show_sequential_slider()
     ImGui::SetNextWindowPos({ 0.5f * (float)width, (float)height }, ImGuiCond_Always, { 0.5f, 1.0f });
     ImGui::SetNextWindowBgAlpha(0.25f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::SetNextItemWidth(0.5f * width);
     ImGui::Begin("##sequential", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
 
     int count = (int)config::visible_segments_count;
-    if (ImGui::SliderInt("##slider", &count, 1, (int)config::total_segments_count)) {
+    const std::string start = "1";
+    const std::string end = std::to_string(config::total_segments_count);
+    const float labels_width = ImGui::CalcTextSize((start + end).c_str()).x;
+
+    ImGui::Text("%d", 1);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(0.5f * width - labels_width);
+    if (ImGui::SliderInt("##slider", &count, 1, (int)config::total_segments_count, "%d", ImGuiSliderFlags_NoInput)) {
         config::visible_segments_count = (size_t)count;
     }
+    ImGui::SameLine();
+    ImGui::Text("%d", config::total_segments_count);
 
     ImGui::End();
     ImGui::PopStyleVar();
