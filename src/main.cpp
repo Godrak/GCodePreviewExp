@@ -189,6 +189,12 @@ static void glfw_mouse_button_callback(GLFWwindow* window, int button, int actio
 {
     ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
 }
+
+static void glfw_window_iconify_callback(GLFWwindow* window, int value)
+{
+    config::window_minimized = value == GLFW_TRUE;
+}
+
 } // namespace glfwContext
 
 // Reader function to load vector of PathPoints from a file
@@ -650,6 +656,7 @@ int main(int argc, char *argv[])
     glfwSetKeyCallback(window, glfwContext::glfw_key_callback);
     glfwSetCursorPosCallback(window, glfwContext::glfw_cursor_position_callback);
     glfwSetMouseButtonCallback(window, glfwContext::glfw_mouse_button_callback);
+    glfwSetWindowIconifyCallback(window, glfwContext::glfw_window_iconify_callback);
 
     ImGui_ImplOpenGL3_Init(glsl_version);
 
@@ -710,6 +717,9 @@ int main(int argc, char *argv[])
 
         if (glfwWindowShouldClose(window))
             break;
+
+        if (config::window_minimized)
+            continue;
 
         rendering::switchConfiguration();
 
