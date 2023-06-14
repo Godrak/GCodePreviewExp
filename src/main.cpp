@@ -83,16 +83,6 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
             std::cout << "with_visibility_pass: " << config::with_visibility_pass << std::endl;
             break;
         }
-        case GLFW_KEY_R: {
-            config::percentage_to_show += 0.005f;
-            config::percentage_to_show = fmin(1.0f, config::percentage_to_show);
-            break;
-        }
-        case GLFW_KEY_F: {
-            config::percentage_to_show -= 0.005f;
-            config::percentage_to_show = fmax(0.0f, config::percentage_to_show);
-            break;
-        }
         case GLFW_KEY_W: {
             forth_back = ('w');
             break;
@@ -163,17 +153,24 @@ static void glfw_cursor_position_callback(GLFWwindow *window, double xpos, doubl
 {
     ImGui_ImplGlfw_CursorPosCallback(window, xpos, ypos);
 
-    const int ctrl_pressed = glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
-    if (!ctrl_pressed) {
-        glm::vec2 offset;
-        offset[0] = (float) (-xpos + last_xpos);
-        offset[1] = (float) (ypos - last_ypos);
-        offset *= 0.001f * camera::rotationSpeed;
-        camera::moveCamera(offset);
+    if (!ImGui::GetIO().WantCaptureMouse) {
+        const int shift_pressed = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT);
+        if (!shift_pressed) {
+            glm::vec2 offset;
+            offset[0] = (float)(-xpos + last_xpos);
+            offset[1] = (float)(ypos - last_ypos);
+            offset *= 0.001f * camera::rotationSpeed;
+            camera::moveCamera(offset);
+        }
     }
 
     last_xpos = xpos;
     last_ypos = ypos;
+}
+
+static void glfw_mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
 }
 } // namespace glfwContext
 
@@ -275,6 +272,26 @@ static void show_visualization_type()
     };
 
     ImGui::Combo("##combo", &config::visualization_type, options, IM_ARRAYSIZE(options));
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
+void show_sequential_slider()
+{
+    int width, height;
+    glfwGetWindowSize(glfwContext::window, &width, &height);
+
+    ImGui::SetNextWindowPos({ 0.5f * (float)width, (float)height }, ImGuiCond_Always, { 0.5f, 1.0f });
+    ImGui::SetNextWindowBgAlpha(0.25f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::SetNextItemWidth(0.5f * width);
+    ImGui::Begin("##sequential", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+
+    int count = (int)config::visible_segments_count;
+    if (ImGui::SliderInt("##slider", &count, 1, (int)config::total_segments_count)) {
+        config::visible_segments_count = (size_t)count;
+    }
 
     ImGui::End();
     ImGui::PopStyleVar();
@@ -426,10 +443,8 @@ void render(gcode::BufferedPath &path)
             // this tells the vertex shader to ignore visiblity values and render all lines instead
             glUniform1i(globals::visibility_pass_location, true);
             checkGl();
-            size_t instances_to_render = path.enabled_segments_count * config::percentage_to_show;
-            if (instances_to_render > 0) {
-                glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size, instances_to_render);
-            }
+            if (config::visible_segments_count > 0)
+                glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data_size, (GLsizei)config::visible_segments_count);
             checkGl();
 
             glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
@@ -609,6 +624,7 @@ int main(int argc, char *argv[])
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     glfwSetKeyCallback(window, glfwContext::glfw_key_callback);
     glfwSetCursorPosCallback(window, glfwContext::glfw_cursor_position_callback);
+    glfwSetMouseButtonCallback(window, glfwContext::glfw_mouse_button_callback);
 
     ImGui_ImplOpenGL3_Init(glsl_version);
 
@@ -637,6 +653,9 @@ int main(int argc, char *argv[])
 
     // gcode::BufferedPath path = gcode::generateTestingPathPoints();
     gcode::BufferedPath path = gcode::bufferExtrusionPaths(points);
+
+    config::visible_segments_count = path.enabled_segments_count;
+    config::total_segments_count = path.enabled_segments_count;
 
     std::cout << "PATHS BUFFERED" << std::endl;
 
@@ -678,6 +697,7 @@ int main(int argc, char *argv[])
         show_config_window();
         show_opengl();
         show_visualization_type();
+        show_sequential_slider();
 
         rendering::render(path);
 
