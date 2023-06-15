@@ -487,6 +487,7 @@ void render(gcode::BufferedPath &path)
                 visible_ids_end = visible_ids;
             }
             path.visiblity_vector.assign(visible_ids, visible_ids_end);
+            if (path.visiblity_vector.empty()) path.visiblity_vector.push_back(0);
             path.filtering_future = filtering_worker.enqueue(
                 [](std::vector<glm::uint32> *vector_to_filter) {
                     auto new_len = hope_unique(&vector_to_filter->front(), vector_to_filter->size());
