@@ -12,10 +12,6 @@ namespace globals {
 glm::ivec2 screenResolution = {512,512};
 // I hoped that vis resolution could be lower, to reduce the rasterization load. Sadly, it the flickering of lines on and off is then much much worse
 glm::ivec2 visibilityResolution = screenResolution;
-
-GLint vp_location = 0;
-GLint camera_position_location = 1;
-GLint visibility_pass_location = 2;
 }
 
 namespace config {

@@ -1,16 +1,14 @@
-#version 450
+#version 140
 
-layout(location = 0) uniform mat4 view_projection;
-layout(location = 1) uniform vec3 camera_position;
-layout(location = 2) uniform int visibility_pass;
+uniform mat4 view_projection;
+uniform vec3 camera_position;
+uniform int visibility_pass;
 
-layout(location = 0) in int vertex_id;
+uniform samplerBuffer positionsTex;
+uniform samplerBuffer heightWidthFlagsTex;
+uniform isamplerBuffer segmentIndexTex;
 
-layout(binding = 0) uniform samplerBuffer positionsTex;
-layout(binding = 1) uniform samplerBuffer heightWidthFlagsTex;
-layout(binding = 2) uniform isamplerBuffer segmentIndexTex;
-
-vec3 featureTypeColor(unsigned int id) {
+vec3 featureTypeColor(int id) {
 	switch (id)
 	{
 	case  0: return vec3(0.90, 0.70, 0.70); // GCodeExtrusionRole::None
@@ -32,7 +30,7 @@ vec3 featureTypeColor(unsigned int id) {
 	}
 }
 
-vec3 travelTypeColor(unsigned int id) {
+vec3 travelTypeColor(int id) {
 	switch (id)
 	{
 	case  0: return vec3(0.219, 0.282, 0.609); // Move
@@ -42,11 +40,13 @@ vec3 travelTypeColor(unsigned int id) {
 	}
 }
 
-int extract_role_from_flags(float flags) { 	return int(round(flags)) & 0xFF; }
-int extract_type_from_flags(float flags) { 	return (int(round(flags)) >> 8) & 0xFF; }
+int extract_role_from_flags(float flags) { return int(round(flags)) & 0xFF; }
+int extract_type_from_flags(float flags) { return (int(round(flags)) >> 8) & 0xFF; }
 
-out flat int id_a;
-out flat int id_b;
+in int vertex_id;
+
+flat out int id_a;
+flat out int id_b;
 out vec3 pos;
 out vec3 color;
 

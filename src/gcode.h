@@ -153,7 +153,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glGenBuffers(1, &result.visible_segments_doublebuffer.first);
     glGenBuffers(1, &result.visible_segments_doublebuffer.second);
     glGenTextures(1, &result.enabled_segments_texture);
-	glGenBuffers(1, &result.visibility_pixel_buffer);
+    glGenBuffers(1, &result.visibility_pixel_buffer);
 
     result.rendering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     result.buffering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -237,7 +237,7 @@ void init()
 
     glGenFramebuffers(1, &visibilityFramebuffer);
     glGenTextures(1, &instanceIdsTexture);
-	glGenTextures(1, &depthTexture);
+  	glGenTextures(1, &depthTexture);
     recreateVisibilityBufferOnResolutionChange();
 
     glGenVertexArrays(1, &quadVAO);

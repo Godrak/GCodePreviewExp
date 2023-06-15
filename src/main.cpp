@@ -536,8 +536,20 @@ void render(gcode::BufferedPath &path)
             // except for the different resolution and shader program, this render pass is same as the final GCode render.
             // what happens here is that all boxes of all lines are rendered, but only the visible ones will have their ids written into the
             // framebuffer
-            glBindVertexArray(gcode::gcodeVAO);
             glUseProgram(shaderProgram::visibility_program);
+            glBindVertexArray(gcode::gcodeVAO);
+            checkGl();
+
+            const int positions_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "positionsTex");
+            assert(positions_tex_id >= 0);
+            const int height_width_flags_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "heightWidthFlagsTex");
+            assert(height_width_flags_tex_id >= 0);
+            const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "segmentIndexTex");
+            assert(segment_index_tex_id >= 0);
+
+            glUniform1i(positions_tex_id, 0);
+            glUniform1i(height_width_flags_tex_id, 1);
+            glUniform1i(segment_index_tex_id, 2);
             checkGl();
 
             glActiveTexture(GL_TEXTURE0);
@@ -552,11 +564,19 @@ void render(gcode::BufferedPath &path)
             glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
             glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
 
-            glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(visiblity_view_projection));
-            glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
+            const int vp_id = ::glGetUniformLocation(shaderProgram::visibility_program, "view_projection");
+            assert(vp_id >= 0);
+            const int camera_position_id = ::glGetUniformLocation(shaderProgram::visibility_program, "camera_position");
+            assert(camera_position_id >= 0);
+            const int visibility_pass_id = ::glGetUniformLocation(shaderProgram::visibility_program, "visibility_pass");
+            assert(visibility_pass_id >= 0);
+
+            glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(visiblity_view_projection));
+            glUniform3fv(camera_position_id, 1, glm::value_ptr(lastCameraPosition));
             // this tells the vertex shader to ignore visiblity values and render all lines instead
-            glUniform1i(globals::visibility_pass_location, true);
+            glUniform1i(visibility_pass_id, true);
             checkGl();
+
             if (config::visible_segments_count > 0)
                 glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data_size, (GLsizei)config::visible_segments_count);
             checkGl();
@@ -590,8 +610,20 @@ void render(gcode::BufferedPath &path)
     glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
     checkGl();
 
-    glBindVertexArray(gcode::gcodeVAO);
     glUseProgram(shaderProgram::gcode_program);
+    glBindVertexArray(gcode::gcodeVAO);
+    checkGl();
+
+    const int positions_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "positionsTex");
+    assert(positions_tex_id >= 0);
+    const int height_width_flags_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthFlagsTex");
+    assert(height_width_flags_tex_id >= 0);
+    const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "segmentIndexTex");
+    assert(segment_index_tex_id >= 0);
+
+    glUniform1i(positions_tex_id, 0);
+    glUniform1i(height_width_flags_tex_id, 1);
+    glUniform1i(segment_index_tex_id, 2);
     checkGl();
 
     glActiveTexture(GL_TEXTURE0);
@@ -606,11 +638,18 @@ void render(gcode::BufferedPath &path)
     glBindTexture(GL_TEXTURE_BUFFER, path.visible_segments_texture);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_segments_doublebuffer.first);
 
-    glUniformMatrix4fv(globals::vp_location, 1, GL_FALSE, glm::value_ptr(view_projection));
-    glUniform3fv(globals::camera_position_location, 1, glm::value_ptr(lastCameraPosition));
-    glUniform1i(globals::visibility_pass_location, false);
+    const int vp_id = ::glGetUniformLocation(shaderProgram::gcode_program, "view_projection");
+    assert(vp_id >= 0);
+    const int camera_position_id = ::glGetUniformLocation(shaderProgram::gcode_program, "camera_position");
+    assert(camera_position_id >= 0);
+    const int visibility_pass_id = ::glGetUniformLocation(shaderProgram::gcode_program, "visibility_pass");
+    assert(visibility_pass_id >= 0);
 
+    glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
+    glUniform3fv(camera_position_id, 1, glm::value_ptr(lastCameraPosition));
+    glUniform1i(visibility_pass_id, false);
     checkGl();
+
     if (path.visible_segments_counts.first > 0)
         glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data_size, (GLsizei)path.visible_segments_counts.first);
     checkGl();

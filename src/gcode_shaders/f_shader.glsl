@@ -1,22 +1,22 @@
-#version 450
+#version 140
 
 #ifdef GL_ES
     #extension GL_EXT_frag_depth : enable
     precision mediump float;
 #endif
 
-layout(location = 0) uniform mat4 view_projection;
-layout(location = 1) uniform vec3 camera_position;
+uniform mat4 view_projection;
+uniform vec3 camera_position;
 
-layout(binding = 0) uniform samplerBuffer positionsTex;
-layout(binding = 1) uniform samplerBuffer heightWidthFlagsTex;
+uniform samplerBuffer positionsTex;
+uniform samplerBuffer heightWidthFlagsTex;
 
-out vec4 fragmentColor;
-
-in flat int id_a;
-in flat int id_b;
+flat in int id_a;
+flat in int id_b;
 in vec3 pos;
 in vec3 color;
+
+out vec4 fragmentColor;
 
 // Function to get the nearest point on a line segment
 vec3 getNearestPointOnLineSegment(vec3 p, vec3 a, vec3 ab, out float t) {
