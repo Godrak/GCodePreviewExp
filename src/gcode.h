@@ -19,6 +19,10 @@
 #include <iostream>
 
 namespace gcode {
+
+static unsigned int extract_role_from_flags(unsigned int flags) { return flags & 0xFF; }
+static unsigned int extract_type_from_flags(unsigned int flags) { return (flags >> 8) & 0xFF; }
+
 GLuint gcodeVAO, vertexBuffer;
 GLuint visibilityFramebuffer, instanceIdsTexture, depthTexture;
 GLuint quadVAO;
@@ -44,8 +48,8 @@ struct PathPoint
     float width;
 
     unsigned int encode_flags(unsigned int role, unsigned int type) { flags = role << 0 | type << 8; return flags; }
-    unsigned int decode_role_from_flags() const { return flags & 0xFF; }
-    unsigned int decode_type_from_flags() const { return (flags >> 8) & 0xFF; }
+    unsigned int role_from_flags() const { return extract_role_from_flags(flags); }
+    unsigned int type_from_flags() const { return extract_type_from_flags(flags); }
 };
 
 enum class VisibilityStatus {READY, RENDERING};
@@ -68,8 +72,6 @@ struct BufferedPath
     GLsync buffering_sync_fence;
 };
 
-static unsigned int extract_type_from_flags(unsigned int flags) { return (flags >> 8) & 0xFF; }
-
 BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     BufferedPath result;
 
@@ -82,7 +84,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
             enabled_segments.push_back((glm::uint32)positions.size());
         }
         positions.push_back({path_points[i].position});
-        const unsigned int type = path_points[i].decode_type_from_flags();
+        const unsigned int type = path_points[i].type_from_flags();
         const float height = (type == 8) ? 0.1f : path_points[i].height;
         const float width  = (type == 8) ? 0.1f : path_points[i].width;
 
