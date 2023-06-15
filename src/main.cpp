@@ -3,6 +3,10 @@
 // If you are new to Dear ImGui, read documentation from the docs/ folder + read the top of imgui.cpp.
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif // _WIN32
+
 #include "glad/glad.h"
 
 #include "globals.h"
@@ -14,7 +18,6 @@
 
 #include <cstddef>
 #include <tbb/tbb.h>
-#include <tbb/parallel_sort.h>
 
 #include <GLFW/glfw3.h>
 
@@ -51,13 +54,6 @@
 #include "camera.h"
 #include "gcode.h"
 #include "shaders.h"
-
-// std::clamp requires c++17
-template <typename T>
-static float clamp(const T& value, const T& min, const T& max) {
-  return (value < min) ? min :
-         (max < value) ? max : value;
-}
 
 namespace glfwContext {
 GLFWwindow *window{nullptr};
@@ -130,12 +126,12 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
         }
         case GLFW_KEY_LEFT: {
             const size_t offset = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1;
-            config::visible_segments_count = (size_t)clamp<int>((int)config::visible_segments_count - (int)offset, 1, (int)config::total_segments_count);
+            config::visible_segments_count = (size_t)std::clamp<int>((int)config::visible_segments_count - (int)offset, 1, (int)config::total_segments_count);
             break;
         }
         case GLFW_KEY_RIGHT: {
             const size_t offset = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1;
-            config::visible_segments_count = clamp<size_t>(config::visible_segments_count + offset, 1, config::total_segments_count);
+            config::visible_segments_count = (size_t)std::clamp<size_t>(config::visible_segments_count + offset, 1, config::total_segments_count);
             break;
         }
         }
@@ -567,7 +563,7 @@ void render(gcode::BufferedPath &path)
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     checkGl();
     glEnable(GL_DEPTH_TEST);
-    glClearColor(0.6, 0.6, 0.6, 1.0);
+    glClearColor(0.6f, 0.6f, 0.6f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     checkGl();
     glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
@@ -595,7 +591,7 @@ void render(gcode::BufferedPath &path)
 
     checkGl();
     if (path.visible_segments_counts.first > 0)
-        glDrawArraysInstanced(GL_TRIANGLES, 0, gcode::vertex_data_size, path.visible_segments_counts.first);
+        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data_size, (GLsizei)path.visible_segments_counts.first);
     checkGl();
 
     glUseProgram(0);

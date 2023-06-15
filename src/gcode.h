@@ -79,7 +79,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
     for (size_t i = 0; i < path_points.size(); i++) {
         if (i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position) {
-            enabled_segments.push_back(positions.size());
+            enabled_segments.push_back((glm::uint32)positions.size());
         }
         positions.push_back({path_points[i].position});
         const unsigned int type = path_points[i].decode_type_from_flags();
