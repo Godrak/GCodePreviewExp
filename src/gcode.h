@@ -57,7 +57,7 @@ enum class VisibilityStatus {READY, RENDERING};
 struct BufferedPath
 {
     GLuint positions_texture, positions_buffer;
-    GLuint height_width_type_texture, height_width_type_buffer;
+    GLuint height_width_color_texture, height_width_color_buffer;
     GLuint enabled_segments_texture, enabled_segments_buffer;
     size_t enabled_segments_count = 0;
     GLuint visible_segments_texture;
@@ -72,11 +72,90 @@ struct BufferedPath
     GLsync buffering_sync_fence;
 };
 
+const std::vector<std::array<float, 4>> Extrusion_Role_Colors{ {
+    { 0.90f, 0.70f, 0.70f, 1.0f },   // None
+    { 1.00f, 0.90f, 0.30f, 1.0f },   // Perimeter
+    { 1.00f, 0.49f, 0.22f, 1.0f },   // ExternalPerimeter
+    { 0.12f, 0.12f, 1.00f, 1.0f },   // OverhangPerimeter
+    { 0.69f, 0.19f, 0.16f, 1.0f },   // InternalInfill
+    { 0.59f, 0.33f, 0.80f, 1.0f },   // SolidInfill
+    { 0.94f, 0.25f, 0.25f, 1.0f },   // TopSolidInfill
+    { 1.00f, 0.55f, 0.41f, 1.0f },   // Ironing
+    { 0.30f, 0.50f, 0.73f, 1.0f },   // BridgeInfill
+    { 1.00f, 1.00f, 1.00f, 1.0f },   // GapFill
+    { 0.00f, 0.53f, 0.43f, 1.0f },   // Skirt
+    { 0.00f, 1.00f, 0.00f, 1.0f },   // SupportMaterial
+    { 0.00f, 0.50f, 0.00f, 1.0f },   // SupportMaterialInterface
+    { 0.70f, 0.89f, 0.67f, 1.0f },   // WipeTower
+    { 0.37f, 0.82f, 0.58f, 1.0f },   // Custom
+} };
+
+const std::vector<std::array<float, 4>> Travel_Colors{ {
+    { 0.219f, 0.282f, 0.609f, 1.0f }, // Move
+    { 0.112f, 0.422f, 0.103f, 1.0f }, // Extrude
+    { 0.505f, 0.064f, 0.028f, 1.0f }  // Retract
+} };
+
+void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& path_points)
+{
+    auto select_color = [](unsigned int flags) {
+        static const std::array<float, 4> error_color = { 0.5f, 0.5f, 0.5f, 1.0f };
+        const unsigned int role = extract_role_from_flags(flags);
+        const unsigned int type = extract_type_from_flags(flags);
+        switch (config::visualization_type)
+        {
+        case 0: // Feature type
+        {
+            switch (type)
+            {
+            case 8: // Travel
+            {
+                assert(role < Travel_Colors.size());
+                return Travel_Colors[role];
+            }
+            case 10: // Extrude
+            {
+                assert(role < Extrusion_Role_Colors.size());
+                return Extrusion_Role_Colors[role];
+            }
+            }
+            break;
+        }
+        }
+
+        return error_color;
+    };
+
+    auto format_color = [&](const PathPoint& point) {
+        const std::array<float, 4> color = select_color(point.flags);
+        const int r = (int)(255.0f * color[0]);
+        const int g = (int)(255.0f * color[1]);
+        const int b = (int)(255.0f * color[2]);
+        const int a = (int)(255.0f * color[3]);
+        const int i_color = r << 24 | g << 16 | b << 8 | a;
+        return float(i_color);
+    };
+
+    assert(path.height_width_color_buffer > 0);
+    glBindBuffer(GL_TEXTURE_BUFFER, path.height_width_color_buffer);
+    const char* ptr = (const char*)glMapBuffer(GL_TEXTURE_BUFFER, GL_WRITE_ONLY);
+
+    assert(ptr != nullptr);
+
+    for (size_t i = 0; i < path_points.size(); i++) {
+        const float color = format_color(path_points[i]);
+        const size_t offset = (i * 3 + 2) * sizeof(float);
+        memcpy((void*)(ptr + offset), (const void*)&color, sizeof(color));
+    }
+
+    glBindBuffer(GL_TEXTURE_BUFFER, 0);
+}
+
 BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     BufferedPath result;
 
     std::vector<glm::vec3> positions;
-    std::vector<glm::vec3> height_width_flags;
+    std::vector<glm::vec3> height_width_color;
     std::vector<glm::uint32> enabled_segments;
 
     for (size_t i = 0; i < path_points.size(); i++) {
@@ -88,7 +167,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
         const float height = (type == 8) ? 0.1f : path_points[i].height;
         const float width  = (type == 8) ? 0.1f : path_points[i].width;
 
-        height_width_flags.push_back({ height, width, float(path_points[i].flags) });
+        height_width_color.push_back({ height, width, 0.0f }); // color will be set later with updatePathColors()
     }
 
     result.enabled_segments_count = enabled_segments.size();
@@ -114,18 +193,18 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
      // Create a buffer object and bind it to the texture buffer
-    glGenBuffers(1, &result.height_width_type_buffer);
-    glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_type_buffer);
+    glGenBuffers(1, &result.height_width_color_buffer);
+    glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_color_buffer);
 
     // buffer data to the path buffer
-    glBufferData(GL_TEXTURE_BUFFER, height_width_flags.size() * sizeof(glm::vec3), height_width_flags.data(), GL_STATIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, height_width_color.size() * sizeof(glm::vec3), height_width_color.data(), GL_DYNAMIC_DRAW);
 
     // Create and bind the path texture
-    glGenTextures(1, &result.height_width_type_texture);
-    glBindTexture(GL_TEXTURE_BUFFER, result.height_width_type_texture);
+    glGenTextures(1, &result.height_width_color_texture);
+    glBindTexture(GL_TEXTURE_BUFFER, result.height_width_color_texture);
 
     // Attach the buffer object to the texture buffer
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, result.height_width_type_buffer);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, result.height_width_color_buffer);
 
     // Unbind the buffer object and the texture buffer
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
@@ -159,6 +238,8 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     result.buffering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 
     glBindVertexArray(0);
+
+    updatePathColors(result, path_points);
 
     return result;
 }

@@ -9,12 +9,12 @@ uniform mat4 view_projection;
 uniform vec3 camera_position;
 
 uniform samplerBuffer positionsTex;
-uniform samplerBuffer heightWidthFlagsTex;
+uniform samplerBuffer heightWidthColorTex;
 
 flat in int id_a;
 flat in int id_b;
 in vec3 pos;
-in vec3 color;
+in vec4 color;
 
 out vec4 fragmentColor;
 
@@ -44,14 +44,13 @@ vec3 calculateClosestPointOnEllipsoid(vec3 point, vec3 ellipsoidCenter, vec3 ell
 void main() {    
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
     vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
-    vec3 height_width_type_a = texelFetch(heightWidthFlagsTex, id_a).xyz;
-    vec3 height_width_type_b = texelFetch(heightWidthFlagsTex, id_b).xyz;
+    vec3 height_width_color_a = texelFetch(heightWidthColorTex, id_a).xyz;
+    vec3 height_width_color_b = texelFetch(heightWidthColorTex, id_b).xyz;
 
-
-    float half_height_a = 0.5* height_width_type_a.x;
-    float half_width_a = 0.5 * height_width_type_a.y;
-    float half_height_b = 0.5 * height_width_type_b.x;
-    float half_width_b = 0.5 * height_width_type_a.y;
+    float half_height_a = 0.5* height_width_color_a.x;
+    float half_width_a = 0.5 * height_width_color_a.y;
+    float half_height_b = 0.5 * height_width_color_b.x;
+    float half_width_b = 0.5 * height_width_color_b.y;
 
     vec3 radii_a = vec3(half_width_a, half_width_a, half_height_a);
     vec3 radii_b = vec3(half_width_b, half_width_b, half_height_b);
@@ -102,7 +101,7 @@ void main() {
 
     float diffuseFactor = max(dot(normal, light_top_dir), 0.0);
     float diffuseFactor2 = max(dot(normal, -light_front_dir), 0.0);
-    vec3 diffuse = color * (ambient + light_top_diffuse * diffuseFactor + light_front_diffuse * diffuseFactor2);
+    vec3 diffuse = color.rgb * (ambient + light_top_diffuse * diffuseFactor + light_front_diffuse * diffuseFactor2);
 
     vec4 clip = view_projection * vec4(surface_point, 1.0);
 
@@ -112,7 +111,7 @@ void main() {
     gl_FragDepth = ((gl_DepthRange.diff * clip.z / clip.w) + gl_DepthRange.near + gl_DepthRange.far) / 2.0;
     #endif
 
-    fragmentColor = vec4(diffuse, 1.0);
+    fragmentColor = vec4(diffuse, color.a);
 
 }
 

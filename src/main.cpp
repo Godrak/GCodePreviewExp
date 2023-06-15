@@ -288,7 +288,7 @@ static void show_opengl()
     ImGui::PopStyleVar();
 }
 
-static void show_visualization_type()
+static void show_visualization_type(const gcode::BufferedPath& path, const std::vector<gcode::PathPoint>& path_points)
 {
     int width, height;
     glfwGetWindowSize(glfwContext::window, &width, &height);
@@ -312,7 +312,11 @@ static void show_visualization_type()
         "Color Print"
     };
 
-    ImGui::Combo("##combo", &config::visualization_type, options, IM_ARRAYSIZE(options));
+    const int old_visualization_type = config::visualization_type;
+    if (ImGui::Combo("##combo", &config::visualization_type, options, IM_ARRAYSIZE(options))) {
+        if (old_visualization_type != config::visualization_type)
+            gcode::updatePathColors(path, path_points);
+    }
 
     ImGui::End();
     ImGui::PopStyleVar();
@@ -542,13 +546,13 @@ void render(gcode::BufferedPath &path)
 
             const int positions_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "positionsTex");
             assert(positions_tex_id >= 0);
-            const int height_width_flags_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "heightWidthFlagsTex");
-            assert(height_width_flags_tex_id >= 0);
+            const int height_width_color_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "heightWidthColorTex");
+            assert(height_width_color_tex_id >= 0);
             const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "segmentIndexTex");
             assert(segment_index_tex_id >= 0);
 
             glUniform1i(positions_tex_id, 0);
-            glUniform1i(height_width_flags_tex_id, 1);
+            glUniform1i(height_width_color_tex_id, 1);
             glUniform1i(segment_index_tex_id, 2);
             checkGl();
 
@@ -557,8 +561,8 @@ void render(gcode::BufferedPath &path)
             glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
 
             glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_BUFFER, path.height_width_type_texture);
-            glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_type_buffer);
+            glBindTexture(GL_TEXTURE_BUFFER, path.height_width_color_texture);
+            glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_color_buffer);
 
             glActiveTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
@@ -616,13 +620,13 @@ void render(gcode::BufferedPath &path)
 
     const int positions_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "positionsTex");
     assert(positions_tex_id >= 0);
-    const int height_width_flags_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthFlagsTex");
-    assert(height_width_flags_tex_id >= 0);
+    const int height_width_color_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthColorTex");
+    assert(height_width_color_tex_id >= 0);
     const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "segmentIndexTex");
     assert(segment_index_tex_id >= 0);
 
     glUniform1i(positions_tex_id, 0);
-    glUniform1i(height_width_flags_tex_id, 1);
+    glUniform1i(height_width_color_tex_id, 1);
     glUniform1i(segment_index_tex_id, 2);
     checkGl();
 
@@ -631,8 +635,8 @@ void render(gcode::BufferedPath &path)
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
 
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_BUFFER, path.height_width_type_texture);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_type_buffer);
+    glBindTexture(GL_TEXTURE_BUFFER, path.height_width_color_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_color_buffer);
 
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_BUFFER, path.visible_segments_texture);
@@ -805,7 +809,7 @@ int main(int argc, char *argv[])
         show_fps();
         show_config_window();
         show_opengl();
-        show_visualization_type();
+        show_visualization_type(path, points);
         show_sequential_slider();
 
         rendering::render(path);

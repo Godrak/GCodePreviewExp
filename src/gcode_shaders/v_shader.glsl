@@ -5,50 +5,26 @@ uniform vec3 camera_position;
 uniform int visibility_pass;
 
 uniform samplerBuffer positionsTex;
-uniform samplerBuffer heightWidthFlagsTex;
+uniform samplerBuffer heightWidthColorTex;
 uniform isamplerBuffer segmentIndexTex;
 
-vec3 featureTypeColor(int id) {
-	switch (id)
-	{
-	case  0: return vec3(0.90, 0.70, 0.70); // GCodeExtrusionRole::None
-    case  1: return vec3(1.00, 0.90, 0.30); // GCodeExtrusionRole::Perimeter
-    case  2: return vec3(1.00, 0.49, 0.22); // GCodeExtrusionRole::ExternalPerimeter
-    case  3: return vec3(0.12, 0.12, 1.00); // GCodeExtrusionRole::OverhangPerimeter
-    case  4: return vec3(0.69, 0.19, 0.16); // GCodeExtrusionRole::InternalInfill
-    case  5: return vec3(0.59, 0.33, 0.80); // GCodeExtrusionRole::SolidInfill
-    case  6: return vec3(0.94, 0.25, 0.25); // GCodeExtrusionRole::TopSolidInfill
-    case  7: return vec3(1.00, 0.55, 0.41); // GCodeExtrusionRole::Ironing
-    case  8: return vec3(0.30, 0.50, 0.73); // GCodeExtrusionRole::BridgeInfill
-    case  9: return vec3(1.00, 1.00, 1.00); // GCodeExtrusionRole::GapFill
-    case 10: return vec3(0.00, 0.53, 0.43); // GCodeExtrusionRole::Skirt
-    case 11: return vec3(0.00, 1.00, 0.00); // GCodeExtrusionRole::SupportMaterial
-    case 12: return vec3(0.00, 0.50, 0.00); // GCodeExtrusionRole::SupportMaterialInterface
-    case 13: return vec3(0.70, 0.89, 0.67); // GCodeExtrusionRole::WipeTower
-    case 14: return vec3(0.37, 0.82, 0.58); // GCodeExtrusionRole::Custom
-	default: return vec3(0.00, 0.00, 0.00); // error
-	}
+vec4 decode_color(float color)
+{
+	int c = int(round(color));
+	int r = (c >> 24) & 0xFF;
+	int g = (c >> 16) & 0xFF;
+	int b = (c >> 8) & 0xFF;
+	int a = (c >> 0) & 0xFF;
+	float f = 1.0 / 255.0f;
+    return f * vec4(r, g, b, a);
 }
-
-vec3 travelTypeColor(int id) {
-	switch (id)
-	{
-	case  0: return vec3(0.219, 0.282, 0.609); // Move
-	case  1: return vec3(0.112, 0.422, 0.103); // Extrude
-	case  2: return vec3(0.505, 0.064, 0.028); // Retract
-	default: return vec3(0.000, 0.000, 0.000); // error
-	}
-}
-
-int extract_role_from_flags(float flags) { return int(round(flags)) & 0xFF; }
-int extract_type_from_flags(float flags) { return (int(round(flags)) >> 8) & 0xFF; }
 
 in int vertex_id;
 
 flat out int id_a;
 flat out int id_b;
 out vec3 pos;
-out vec3 color;
+out vec4 color;
 
 void main() {
     vec3 UP = vec3(0,0,1);
@@ -113,9 +89,9 @@ void main() {
 
     // for visiblity pass, make the lines smaller, so that there are no holes in the result.
     float h = (visibility_pass == 1) ? 0.4 : 0.5;
-    vec3 height_width_flags = texelFetch(heightWidthFlagsTex, id_final).xyz;
-    float half_height = h * height_width_flags.x;
-    float half_width = h * height_width_flags.y;
+    vec3 height_width_color = texelFetch(heightWidthColorTex, id_final).xyz;
+    float half_height = h * height_width_color.x;
+    float half_width = h * height_width_color.y;
 
     // extend beyond the path points by half width - It allows for seamless connections, 
     // also it better represents the reality (with the caps rounded in frag shader)
@@ -128,8 +104,6 @@ void main() {
     pos = texelFetch(positionsTex, id_final).xyz + cap + hsign * horizontal_dir + vsign * vertical_dir;
     gl_Position = view_projection * vec4(pos, 1.0);
 	
-	color = (extract_type_from_flags(height_width_flags.z) == 10) ?
-		featureTypeColor(extract_role_from_flags(height_width_flags.z)) :
-		travelTypeColor(extract_role_from_flags(height_width_flags.z));
+	color = decode_color(height_width_color.z);
 }
 
