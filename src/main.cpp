@@ -68,6 +68,16 @@ static void glfw_error_callback(int error, const char *description) { fprintf(st
 
 static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
+    auto increase_sequential = [&]() {
+        const size_t offset = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1;
+        config::visible_segments_count = (size_t)std::clamp<size_t>(config::visible_segments_count + offset, 1, config::total_segments_count);
+    };
+
+    auto decrease_sequential = [&]() {
+        const size_t offset = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1;
+        config::visible_segments_count = (size_t)std::clamp<int>((int)config::visible_segments_count - (int)offset, 1, (int)config::total_segments_count);
+    };
+
     ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
 
     switch (action) {
@@ -125,13 +135,11 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
             break;
         }
         case GLFW_KEY_LEFT: {
-            const size_t offset = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1;
-            config::visible_segments_count = (size_t)std::clamp<int>((int)config::visible_segments_count - (int)offset, 1, (int)config::total_segments_count);
+            decrease_sequential();
             break;
         }
         case GLFW_KEY_RIGHT: {
-            const size_t offset = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1;
-            config::visible_segments_count = (size_t)std::clamp<size_t>(config::visible_segments_count + offset, 1, config::total_segments_count);
+            increase_sequential();
             break;
         }
         }
@@ -156,6 +164,19 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
         }
         case GLFW_KEY_T: {
             top_view = 't';
+            break;
+        }
+        }
+        break;
+    }
+    case GLFW_REPEAT: {
+        switch (key) {
+        case GLFW_KEY_LEFT: {
+            decrease_sequential();
+            break;
+        }
+        case GLFW_KEY_RIGHT: {
+            increase_sequential();
             break;
         }
         }
