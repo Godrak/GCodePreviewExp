@@ -46,6 +46,10 @@ struct PathPoint
     unsigned int flags;
     float height;
     float width;
+    float speed;
+    float fanspeed;
+    float temperature;
+    float volumetricrate;
 
     unsigned int encode_flags(unsigned int role, unsigned int type) { flags = role << 0 | type << 8; return flags; }
     unsigned int role_from_flags() const { return extract_role_from_flags(flags); }
@@ -118,6 +122,8 @@ class Range
     float m_max{ -FLT_MAX };
 
 public:
+    void reset() { m_min = FLT_MAX; m_max = -FLT_MAX; }
+
     void update(float value) {
         m_min = std::min(m_min, value);
         m_max = std::max(m_max, value);
@@ -167,15 +173,31 @@ public:
 
 Range width_range;
 Range height_range;
+Range speed_range;
+Range fanspeed_range;
+Range temperature_range;
+Range volumetricrate_range;
 
 void set_ranges(const std::vector<PathPoint>& path_points)
 {
+    width_range.reset();
+    height_range.reset();
+    speed_range.reset();
+    fanspeed_range.reset();
+    temperature_range.reset();
+    volumetricrate_range.reset();
+
     for (size_t i = 0; i < path_points.size(); i++) {
         const PathPoint& p = path_points[i];
         if (p.is_extrude_move()) {
             width_range.update(p.width);
             height_range.update(p.height);
+            fanspeed_range.update(p.fanspeed);
+            temperature_range.update(p.temperature);
+            volumetricrate_range.update(p.volumetricrate);
         }
+        if (config::use_travel_moves_data || p.is_extrude_move())
+            speed_range.update(p.speed);
     }
 }
 
@@ -187,54 +209,40 @@ void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& pa
         const unsigned int type = extract_type_from_flags(p.flags);
         switch (config::visualization_type)
         {
-        case 0: // Feature type
+        // Feature type
+        case 0:
         {
-            switch (type)
-            {
-            case 8: // Travel
-            {
-                assert(role < Travel_Colors.size());
-                return Travel_Colors[role];
-            }
-            case 10: // Extrude
-            {
-                assert(role < Extrusion_Role_Colors.size());
-                return Extrusion_Role_Colors[role];
-            }
-            }
-            break;
+            assert((p.is_travel_move() && role < Travel_Colors.size()) || (p.is_extrude_move() && role < Extrusion_Role_Colors.size()));
+            return p.is_travel_move() ? Travel_Colors[role] : Extrusion_Role_Colors[role];
         }
-        case 1: // Height
+        // Height
+        case 1:
         {
-            switch (type)
-            {
-            case 8: // Travel
-            {
-                assert(role < Travel_Colors.size());
-                return Travel_Colors[role];
-            }
-            case 10: // Extrude
-            {
-                return height_range.get_color_at(p.height);
-            }
-            }
-            break;
+            assert(!p.is_travel_move() || role < Travel_Colors.size());
+            return p.is_travel_move() ? Travel_Colors[role] : height_range.get_color_at(p.height);
         }
-        case 2: // Width
+        // Width
+        case 2: 
         {
-            switch (type)
-            {
-            case 8: // Travel
-            {
-              assert(role < Travel_Colors.size());
-              return Travel_Colors[role];
-            }
-            case 10: // Extrude
-            {
-              return width_range.get_color_at(p.width);
-            }
-            }
-            break;
+            assert(!p.is_travel_move() || role < Travel_Colors.size());
+            return p.is_travel_move() ? Travel_Colors[role] : width_range.get_color_at(p.width);
+        }
+        // speed
+        case 3: { return speed_range.get_color_at(p.speed); }
+        // fanspeed
+        case 4: {
+            assert(!p.is_travel_move() || role < Travel_Colors.size());
+            return p.is_travel_move() ? Travel_Colors[role] : fanspeed_range.get_color_at(p.fanspeed);
+        }
+        // temperature
+        case 5: {
+            assert(!p.is_travel_move() || role < Travel_Colors.size());
+            return p.is_travel_move() ? Travel_Colors[role] : temperature_range.get_color_at(p.temperature);
+        }
+        // volumetric rate
+        case 6: {
+            assert(!p.is_travel_move() || role < Travel_Colors.size());
+            return p.is_travel_move() ? Travel_Colors[role] : volumetricrate_range.get_color_at(p.volumetricrate);
         }
         }
 

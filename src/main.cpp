@@ -264,6 +264,10 @@ void show_config_window()
     ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
     if (ImGui::Checkbox("with_visibility_pass", &config::with_visibility_pass)) {}
     if (ImGui::Checkbox("vsync", &config::vsync)) {}
+    if (ImGui::Checkbox("use_travel_moves_data", &config::use_travel_moves_data)) {
+        config::ranges_update_required = true;
+        config::color_update_required = true;
+    }
     ImGui::End();
     ImGui::PopStyleVar();
 }
@@ -684,7 +688,6 @@ int main(int argc, char *argv[])
     const std::string filename = argv[1];
 
     auto points = readPathPoints(filename);
-    gcode::set_ranges(points);
 
     glfwSetErrorCallback(glfwContext::glfw_error_callback);
     if (!glfwInit())
@@ -801,6 +804,11 @@ int main(int argc, char *argv[])
             continue;
 
         rendering::switchConfiguration();
+
+        if (config::ranges_update_required) {
+            gcode::set_ranges(points);
+            config::ranges_update_required = false;
+        }
 
         if (config::color_update_required) {
             gcode::updatePathColors(path, points);
