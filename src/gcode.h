@@ -50,6 +50,8 @@ struct PathPoint
     unsigned int encode_flags(unsigned int role, unsigned int type) { flags = role << 0 | type << 8; return flags; }
     unsigned int role_from_flags() const { return extract_role_from_flags(flags); }
     unsigned int type_from_flags() const { return extract_type_from_flags(flags); }
+    bool is_travel_move() const  { return extract_type_from_flags(flags) == 8; }
+    bool is_extrude_move() const { return extract_type_from_flags(flags) == 10; }
 };
 
 enum class VisibilityStatus {READY, RENDERING};
@@ -96,12 +98,93 @@ const std::vector<std::array<float, 4>> Travel_Colors{ {
     { 0.505f, 0.064f, 0.028f, 1.0f }  // Retract
 } };
 
+const std::vector<std::array<float, 4>> Range_Colors{ {
+    { 0.043f, 0.173f, 0.478f, 1.0f }, // bluish
+    { 0.075f, 0.349f, 0.522f, 1.0f },
+    { 0.110f, 0.533f, 0.569f, 1.0f },
+    { 0.016f, 0.839f, 0.059f, 1.0f },
+    { 0.667f, 0.949f, 0.000f, 1.0f },
+    { 0.988f, 0.975f, 0.012f, 1.0f },
+    { 0.961f, 0.808f, 0.039f, 1.0f },
+    { 0.890f, 0.533f, 0.125f, 1.0f },
+    { 0.820f, 0.408f, 0.188f, 1.0f },
+    { 0.761f, 0.322f, 0.235f, 1.0f },
+    { 0.581f, 0.149f, 0.087f, 1.0f }  // reddish
+} };
+
+class Range
+{
+    float m_min{ FLT_MAX };
+    float m_max{ -FLT_MAX };
+
+public:
+    void update(float value) {
+        m_min = std::min(m_min, value);
+        m_max = std::max(m_max, value);
+    }
+
+    float step_size(bool logarithmic = false) const {
+      if (m_max < m_min)
+          return 0.0f;
+      else if (logarithmic)
+          return log(m_max / m_min) / ((float)Range_Colors.size() - 1.0f);
+      else
+          return (m_max - m_min) / ((float)Range_Colors.size() - 1.0f);
+    }
+
+    std::array<float, 4> get_color_at(float value, bool logarithmic = false) const {
+        // std::lerp is available with c++20
+        auto lerp = [](const std::array<float, 4>& a, const std::array<float, 4>& b, float t) {
+            t = std::clamp(t, 0.0f, 1.0f);
+            std::array<float, 4> ret;
+            for (int i = 0; i < 4; ++i) {
+                ret[i] = (1.0f - t) * a[i] + t * b[i];
+            }
+            return ret;
+        };
+
+        // Input value scaled to the colors range
+        float global_t = 0.0f;
+        const float step = step_size(logarithmic);
+        value = std::clamp(value, m_min, m_max);
+        if (step > 0.0f) {
+            if (logarithmic)
+                global_t = log(value / m_min) / step;
+            else
+                global_t = (value - m_min) / step;
+        }
+
+        const size_t color_max_idx = Range_Colors.size() - 1;
+
+        // Compute the two colors just below (low) and above (high) the input value
+        const size_t color_low_idx = std::clamp<size_t>(static_cast<size_t>(global_t), 0, color_max_idx);
+        const size_t color_high_idx = std::clamp<size_t>(color_low_idx + 1, 0, color_max_idx);
+
+        // Interpolate between the low and high colors to find exactly which color the input value should get
+        return lerp(Range_Colors[color_low_idx], Range_Colors[color_high_idx], global_t - static_cast<float>(color_low_idx));
+    }
+};
+
+Range width_range;
+Range height_range;
+
+void set_ranges(const std::vector<PathPoint>& path_points)
+{
+    for (size_t i = 0; i < path_points.size(); i++) {
+        const PathPoint& p = path_points[i];
+        if (p.is_extrude_move()) {
+            width_range.update(p.width);
+            height_range.update(p.height);
+        }
+    }
+}
+
 void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& path_points)
 {
-    auto select_color = [](unsigned int flags) {
+    auto select_color = [](const PathPoint& p) {
         static const std::array<float, 4> error_color = { 0.5f, 0.5f, 0.5f, 1.0f };
-        const unsigned int role = extract_role_from_flags(flags);
-        const unsigned int type = extract_type_from_flags(flags);
+        const unsigned int role = extract_role_from_flags(p.flags);
+        const unsigned int type = extract_type_from_flags(p.flags);
         switch (config::visualization_type)
         {
         case 0: // Feature type
@@ -121,13 +204,45 @@ void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& pa
             }
             break;
         }
+        case 1: // Height
+        {
+            switch (type)
+            {
+            case 8: // Travel
+            {
+                assert(role < Travel_Colors.size());
+                return Travel_Colors[role];
+            }
+            case 10: // Extrude
+            {
+                return height_range.get_color_at(p.height);
+            }
+            }
+            break;
+        }
+        case 2: // Width
+        {
+            switch (type)
+            {
+            case 8: // Travel
+            {
+              assert(role < Travel_Colors.size());
+              return Travel_Colors[role];
+            }
+            case 10: // Extrude
+            {
+              return width_range.get_color_at(p.width);
+            }
+            }
+            break;
+        }
         }
 
         return error_color;
     };
 
-    auto format_color = [&](const PathPoint& point) {
-        const std::array<float, 4> color = select_color(point.flags);
+    auto format_color = [&](const PathPoint& p) {
+        const std::array<float, 4> color = select_color(p);
         const int r = (int)(255.0f * color[0]);
         const int g = (int)(255.0f * color[1]);
         const int b = (int)(255.0f * color[2]);
@@ -159,13 +274,13 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     std::vector<glm::uint32> enabled_segments;
 
     for (size_t i = 0; i < path_points.size(); i++) {
-        if (i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position) {
+        if (i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position)
             enabled_segments.push_back((glm::uint32)positions.size());
-        }
-        positions.push_back({path_points[i].position});
-        const unsigned int type = path_points[i].type_from_flags();
-        const float height = (type == 8) ? 0.1f : path_points[i].height;
-        const float width  = (type == 8) ? 0.1f : path_points[i].width;
+
+        const PathPoint& p = path_points[i];
+        positions.push_back({ p.position });
+        const float height = p.is_travel_move() ? 0.1f : p.height;
+        const float width  = p.is_travel_move() ? 0.1f : p.width;
 
         height_width_color.push_back({ height, width, 0.0f }); // color will be set later with updatePathColors()
     }
@@ -238,8 +353,6 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     result.buffering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 
     glBindVertexArray(0);
-
-    updatePathColors(result, path_points);
 
     return result;
 }

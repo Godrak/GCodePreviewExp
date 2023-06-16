@@ -684,6 +684,7 @@ int main(int argc, char *argv[])
     const std::string filename = argv[1];
 
     auto points = readPathPoints(filename);
+    gcode::set_ranges(points);
 
     glfwSetErrorCallback(glfwContext::glfw_error_callback);
     if (!glfwInit())
@@ -768,6 +769,7 @@ int main(int argc, char *argv[])
 
     // gcode::BufferedPath path = gcode::generateTestingPathPoints();
     gcode::BufferedPath path = gcode::bufferExtrusionPaths(points);
+    updatePathColors(path, points);
 
     config::visible_segments_count = path.enabled_segments_count;
     config::total_segments_count = path.enabled_segments_count;
