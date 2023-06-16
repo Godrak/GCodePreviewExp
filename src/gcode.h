@@ -253,6 +253,7 @@ void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& pa
 
     assert(path.height_width_color_buffer > 0);
     glBindBuffer(GL_TEXTURE_BUFFER, path.height_width_color_buffer);
+
     const char* ptr = (const char*)glMapBuffer(GL_TEXTURE_BUFFER, GL_WRITE_ONLY);
 
     assert(ptr != nullptr);
@@ -263,6 +264,7 @@ void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& pa
         memcpy((void*)(ptr + offset), (const void*)&color, sizeof(color));
     }
 
+    glUnmapBuffer(GL_TEXTURE_BUFFER);
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
 }
 

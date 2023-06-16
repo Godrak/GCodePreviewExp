@@ -288,7 +288,7 @@ static void show_opengl()
     ImGui::PopStyleVar();
 }
 
-static void show_visualization_type(const gcode::BufferedPath& path, const std::vector<gcode::PathPoint>& path_points)
+static void show_visualization_type()
 {
     int width, height;
     glfwGetWindowSize(glfwContext::window, &width, &height);
@@ -315,7 +315,7 @@ static void show_visualization_type(const gcode::BufferedPath& path, const std::
     const int old_visualization_type = config::visualization_type;
     if (ImGui::Combo("##combo", &config::visualization_type, options, IM_ARRAYSIZE(options))) {
         if (old_visualization_type != config::visualization_type)
-            gcode::updatePathColors(path, path_points);
+            config::color_update_required = true;
     }
 
     ImGui::End();
@@ -769,7 +769,6 @@ int main(int argc, char *argv[])
 
     // gcode::BufferedPath path = gcode::generateTestingPathPoints();
     gcode::BufferedPath path = gcode::bufferExtrusionPaths(points);
-    updatePathColors(path, points);
 
     config::visible_segments_count = path.enabled_segments_count;
     config::total_segments_count = path.enabled_segments_count;
@@ -803,6 +802,11 @@ int main(int argc, char *argv[])
 
         rendering::switchConfiguration();
 
+        if (config::color_update_required) {
+            gcode::updatePathColors(path, points);
+            config::color_update_required = false;
+        }
+
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -811,7 +815,7 @@ int main(int argc, char *argv[])
         show_fps();
         show_config_window();
         show_opengl();
-        show_visualization_type(path, points);
+        show_visualization_type();
         show_sequential_slider();
 
         rendering::render(path);
