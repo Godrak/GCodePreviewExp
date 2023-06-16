@@ -31,7 +31,8 @@ void main() {
     vec3 UP = vec3(0,0,1);
 
     // Retrieve the instance ID
-    id_a = int(texelFetch(segmentIndexTex, int(instance_base + gl_InstanceID)).r);
+    int id_position = (visibility_pass == 1) ? instance_base + gl_InstanceID : gl_InstanceID;
+    id_a = int(texelFetch(segmentIndexTex, int(id_position)).r);
     id_b = id_a + 1;
 
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
