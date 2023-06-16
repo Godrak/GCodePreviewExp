@@ -3,6 +3,7 @@
 uniform mat4 view_projection;
 uniform vec3 camera_position;
 uniform int visibility_pass;
+uniform int instance_base;
 
 uniform samplerBuffer positionsTex;
 uniform samplerBuffer heightWidthColorTex;
@@ -30,7 +31,7 @@ void main() {
     vec3 UP = vec3(0,0,1);
 
     // Retrieve the instance ID
-    id_a = int(texelFetch(segmentIndexTex, int(gl_InstanceID)).r);
+    id_a = int(texelFetch(segmentIndexTex, int(instance_base + gl_InstanceID)).r);
     id_b = id_a + 1;
 
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;

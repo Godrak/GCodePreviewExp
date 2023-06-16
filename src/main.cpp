@@ -68,16 +68,6 @@ static void glfw_error_callback(int error, const char *description) { fprintf(st
 
 static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
-    auto increase_sequential = [&]() {
-        const size_t offset = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1;
-        config::visible_segments_count = (size_t)std::clamp<size_t>(config::visible_segments_count + offset, 1, config::total_segments_count);
-    };
-
-    auto decrease_sequential = [&]() {
-        const size_t offset = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1;
-        config::visible_segments_count = (size_t)std::clamp<int>((int)config::visible_segments_count - (int)offset, 1, (int)config::total_segments_count);
-    };
-
     ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
 
     switch (action) {
@@ -135,11 +125,19 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
             break;
         }
         case GLFW_KEY_LEFT: {
-            decrease_sequential();
+            sequential_range.decrease_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
             break;
         }
         case GLFW_KEY_RIGHT: {
-            increase_sequential();
+            sequential_range.increase_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            break;
+        }
+        case GLFW_KEY_DOWN: {
+            sequential_range.decrease_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            break;
+        }
+        case GLFW_KEY_UP: {
+            sequential_range.increase_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
             break;
         }
         }
@@ -172,11 +170,19 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
     case GLFW_REPEAT: {
         switch (key) {
         case GLFW_KEY_LEFT: {
-            decrease_sequential();
+            sequential_range.decrease_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
             break;
         }
         case GLFW_KEY_RIGHT: {
-            increase_sequential();
+            sequential_range.increase_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            break;
+        }
+        case GLFW_KEY_DOWN: {
+            sequential_range.decrease_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            break;
+        }
+        case GLFW_KEY_UP: {
+            sequential_range.increase_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
             break;
         }
         }
@@ -326,7 +332,7 @@ static void show_visualization_type()
     ImGui::PopStyleVar();
 }
 
-void show_sequential_slider()
+void show_sequential_sliders()
 {
     int width, height;
     glfwGetWindowSize(glfwContext::window, &width, &height);
@@ -336,19 +342,32 @@ void show_sequential_slider()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##sequential", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
 
-    int count = (int)config::visible_segments_count;
+    const int global_min = (int)sequential_range.get_global_min();
+    const int global_max = (int)sequential_range.get_global_max();
+
     const std::string start = "1";
-    const std::string end = std::to_string(config::total_segments_count);
+    const std::string end = std::to_string(global_max);
     const float labels_width = ImGui::CalcTextSize((start + end).c_str()).x;
 
     ImGui::Text("%d", 1);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(0.5f * width - labels_width);
-    if (ImGui::SliderInt("##slider", &count, 1, (int)config::total_segments_count, "%d", ImGuiSliderFlags_NoInput)) {
-        config::visible_segments_count = (size_t)count;
+    int low = (int)sequential_range.get_current_min();
+    if (ImGui::SliderInt("##slider_low", &low, global_min, global_max, "%d", ImGuiSliderFlags_NoInput)) {
+        sequential_range.set_current_min((size_t)low);
     }
     ImGui::SameLine();
-    ImGui::Text("%d", config::total_segments_count);
+    ImGui::Text("%d", global_max);
+
+    ImGui::Text("%d", 1);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(0.5f * width - labels_width);
+    int high = (int)sequential_range.get_current_max();
+    if (ImGui::SliderInt("##slider_high", &high, global_min, global_max, "%d", ImGuiSliderFlags_NoInput)) {
+        sequential_range.set_current_max((size_t)high);
+    }
+    ImGui::SameLine();
+    ImGui::Text("%d", global_max);
 
     ImGui::End();
     ImGui::PopStyleVar();
@@ -578,15 +597,18 @@ void render(gcode::BufferedPath &path)
             assert(camera_position_id >= 0);
             const int visibility_pass_id = ::glGetUniformLocation(shaderProgram::visibility_program, "visibility_pass");
             assert(visibility_pass_id >= 0);
+            const int instance_base_id = ::glGetUniformLocation(shaderProgram::gcode_program, "instance_base");
+            assert(instance_base_id >= 0);
 
             glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(visiblity_view_projection));
             glUniform3fv(camera_position_id, 1, glm::value_ptr(lastCameraPosition));
             // this tells the vertex shader to ignore visiblity values and render all lines instead
             glUniform1i(visibility_pass_id, true);
+            glUniform1i(instance_base_id, (int)sequential_range.get_current_min() - 1);
             checkGl();
 
-            if (config::visible_segments_count > 0)
-                glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data_size, (GLsizei)config::visible_segments_count);
+            if (sequential_range.get_current_size() > 0)
+                glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data_size, (GLsizei)sequential_range.get_current_size());
             checkGl();
 
             glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
@@ -652,10 +674,13 @@ void render(gcode::BufferedPath &path)
     assert(camera_position_id >= 0);
     const int visibility_pass_id = ::glGetUniformLocation(shaderProgram::gcode_program, "visibility_pass");
     assert(visibility_pass_id >= 0);
+    const int instance_base_id = ::glGetUniformLocation(shaderProgram::gcode_program, "instance_base");
+    assert(instance_base_id >= 0);
 
     glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
     glUniform3fv(camera_position_id, 1, glm::value_ptr(lastCameraPosition));
     glUniform1i(visibility_pass_id, false);
+    glUniform1i(instance_base_id, (int)sequential_range.get_current_min() - 1);
     checkGl();
 
     if (path.visible_segments_counts.first > 0)
@@ -773,8 +798,8 @@ int main(int argc, char *argv[])
     // gcode::BufferedPath path = gcode::generateTestingPathPoints();
     gcode::BufferedPath path = gcode::bufferExtrusionPaths(points);
 
-    config::visible_segments_count = path.enabled_segments_count;
-    config::total_segments_count = path.enabled_segments_count;
+    sequential_range.set_global_max(path.enabled_segments_count);
+    sequential_range.set_current_max(path.enabled_segments_count);
 
     std::cout << "PATHS BUFFERED" << std::endl;
 
@@ -824,7 +849,7 @@ int main(int argc, char *argv[])
         show_config_window();
         show_opengl();
         show_visualization_type();
-        show_sequential_slider();
+        show_sequential_sliders();
 
         rendering::render(path);
 
