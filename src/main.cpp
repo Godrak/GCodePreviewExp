@@ -274,6 +274,10 @@ void show_config_window()
         config::ranges_update_required = true;
         config::color_update_required = true;
     }
+    ImGui::Separator();
+    if (ImGui::Button("Center view", { -1.0f, 0.0f })) {
+        config::camera_center_required = true;
+    }
     ImGui::End();
     ImGui::PopStyleVar();
 }
@@ -482,6 +486,11 @@ void render(gcode::BufferedPath &path)
     camera::applyViewTransform(view);
     glm::mat4x4 view_projection = view;
     camera::applyProjectionTransform(view_projection);
+
+    if (config::camera_center_required) {
+        gcode::scene_box.center_camera();
+        config::camera_center_required = false;
+    }
 
     if (config::with_visibility_pass) {
         GLint rendering_sync_status;
@@ -710,6 +719,7 @@ int main(int argc, char *argv[])
     const std::string filename = argv[1];
 
     auto points = readPathPoints(filename);
+    gcode::scene_box.update(points);
 
     glfwSetErrorCallback(glfwContext::glfw_error_callback);
     if (!glfwInit())

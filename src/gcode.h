@@ -10,13 +10,17 @@
 #define GCODE_H_
 
 #include "glad/glad.h"
+
 #include "globals.h"
+#include "camera.h"
+
 #include <cstddef>
 #include <future>
 #include <glm/fwd.hpp>
 #include <vector>
 #include <random>
 #include <iostream>
+#include <algorithm>
 
 namespace gcode {
 
@@ -57,6 +61,30 @@ struct PathPoint
     bool is_travel_move() const  { return extract_type_from_flags(flags) == 8; }
     bool is_extrude_move() const { return extract_type_from_flags(flags) == 10; }
 };
+
+class SceneBox
+{
+    glm::vec3 m_min{ FLT_MAX, FLT_MAX, FLT_MAX };
+    glm::vec3 m_max{ -FLT_MAX, -FLT_MAX, -FLT_MAX };
+
+public:
+    void update(const std::vector<PathPoint>& points) {
+        for (const gcode::PathPoint& p : points) {
+            m_min.x = std::min(m_min.x, p.position.x);
+            m_min.y = std::min(m_min.y, p.position.y);
+            m_min.z = std::min(m_min.z, p.position.z);
+            m_max.x = std::max(m_max.x, p.position.x);
+            m_max.y = std::max(m_max.y, p.position.y);
+            m_max.z = std::max(m_max.z, p.position.z);
+        }
+    }
+
+    void center_camera() {
+        camera::position = 0.5f * (m_min + m_max) - glm::length(m_max - m_min) * camera::direction;
+    }
+};
+
+SceneBox scene_box;
 
 enum class VisibilityStatus {READY, RENDERING};
 

@@ -22,6 +22,7 @@ bool vsync = true;
 int visualization_type = 0;
 bool ranges_update_required = true;
 bool color_update_required = true;
+bool camera_center_required = true;
 bool use_travel_moves_data = true;
 bool window_minimized = false;
 }
