@@ -68,13 +68,9 @@ void main() {
 
     vec3 up_dir = normalize(cross(right_dir, line_dir));
 
-    int id_close = id_a;
-    int id_far = id_b;
     float dir_sign = sign(dot(view_b, view_b) - dot(view_a, view_a));
-    if (dir_sign < 0) {
-        id_close = id_b;
-        id_far = id_a;
-    }
+    int id_close = (dir_sign < 0) ? id_b : id_a;
+    int id_far = (dir_sign < 0) ? id_a : id_b;
 
     // vertex_position = pos_close + horizontal_dir + vertical_dir;  0 
     // vertex_position = pos_close - horizontal_dir + vertical_dir;  1
@@ -103,7 +99,8 @@ void main() {
     vec3 horizontal_dir = half_width * right_dir * -sign(dot(view_a, right_dir));
     vec3 vertical_dir = half_height * up_dir * -sign(dot(view_a, up_dir));
 
-    pos = texelFetch(positionsTex, id_final).xyz + cap + hsign * horizontal_dir + vsign * vertical_dir;
+	vec3 finalPos = (id_final == id_a) ? pos_a : pos_b;
+    pos = finalPos + cap + hsign * horizontal_dir + vsign * vertical_dir;
     gl_Position = view_projection * vec4(pos, 1.0);
 	
 	color = decode_color(height_width_color.z);
