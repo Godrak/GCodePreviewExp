@@ -454,6 +454,13 @@ static size_t hope_unique(uint32_t *out, size_t len) {
 glm::vec3 lastCameraPosition = camera::position;
 FilteringWorker filtering_worker{};
 
+#define TIMINGS
+#ifdef TIMINGS
+    bool rendering_finished = false;
+    bool buffering_finished = false;
+    bool filtering_finished = false;
+#endif
+
 void switchConfiguration()
 {
     if (config::geometryMode) {
@@ -496,9 +503,30 @@ void render(gcode::BufferedPath &path)
         GLint buffering_sync_status;
         glGetSynciv(path.buffering_sync_fence, GL_SYNC_STATUS, sizeof(GLint), nullptr, &buffering_sync_status);
 
+#ifdef TIMINGS
+        if (!filtering_finished &&
+            (!path.filtering_future.valid() || path.filtering_future.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready)) {
+            std::cout << "filtering finished " << glfwGetTime() << std::endl;
+        }
+        if (!rendering_finished && rendering_sync_status == GL_SIGNALED) {
+            std::cout << "rendering (and buffering) finished " << glfwGetTime() << std::endl;
+            rendering_finished = true;
+        }
+        if (!buffering_finished && buffering_sync_status == GL_SIGNALED) {
+            std::cout << "buffering finished " << glfwGetTime() << std::endl;
+            buffering_finished = true;
+        }
+#endif
+
         if (rendering_sync_status == GL_SIGNALED && buffering_sync_status == GL_SIGNALED &&
             (!path.filtering_future.valid() || path.filtering_future.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready)) {
-            
+
+#ifdef TIMINGS
+            std::cout << "Visilibty render pass execution start " << glfwGetTime() << std::endl;
+            rendering_finished = false;
+            buffering_finished = false;
+            filtering_finished = false;
+#endif
             // update resolution if needed
             auto new_vis_resolution = globals::screenResolution * 2;
             if (new_vis_resolution != globals::visibilityResolution) {
@@ -520,7 +548,6 @@ void render(gcode::BufferedPath &path)
 
             // FILTERING DATA
             glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
-            double before_mapping = glfwGetTime();
             // Retrieve the size of the PBO buffer
             GLint pixel_buffer_size;
             glGetBufferParameteriv(GL_PIXEL_PACK_BUFFER, GL_BUFFER_SIZE, &pixel_buffer_size);
@@ -618,7 +645,7 @@ void render(gcode::BufferedPath &path)
 
 
 #ifdef TIMINGS
-            std::cout << "VISIBILITY DONE " << glfwGetTime() << std::endl;
+            std::cout << "Visilibty render pass execution END " << glfwGetTime() << std::endl;
 #endif
         }
     }
