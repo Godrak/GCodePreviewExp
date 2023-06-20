@@ -10,13 +10,17 @@
 #define GCODE_H_
 
 #include "glad/glad.h"
+
 #include "globals.h"
+#include "camera.h"
+
 #include <cstddef>
 #include <future>
 #include <glm/fwd.hpp>
 #include <vector>
 #include <random>
 #include <iostream>
+#include <algorithm>
 
 namespace gcode {
 
@@ -50,6 +54,8 @@ struct PathPoint
     float fanspeed;
     float temperature;
     float volumetricrate;
+    unsigned int extruderid;
+    unsigned int colorid;
 
     unsigned int encode_flags(unsigned int role, unsigned int type) { flags = role << 0 | type << 8; return flags; }
     unsigned int role_from_flags() const { return extract_role_from_flags(flags); }
@@ -57,6 +63,30 @@ struct PathPoint
     bool is_travel_move() const  { return extract_type_from_flags(flags) == 8; }
     bool is_extrude_move() const { return extract_type_from_flags(flags) == 10; }
 };
+
+class SceneBox
+{
+    glm::vec3 m_min{ FLT_MAX, FLT_MAX, FLT_MAX };
+    glm::vec3 m_max{ -FLT_MAX, -FLT_MAX, -FLT_MAX };
+
+public:
+    void update(const std::vector<PathPoint>& points) {
+        for (const gcode::PathPoint& p : points) {
+            m_min.x = std::min(m_min.x, p.position.x);
+            m_min.y = std::min(m_min.y, p.position.y);
+            m_min.z = std::min(m_min.z, p.position.z);
+            m_max.x = std::max(m_max.x, p.position.x);
+            m_max.y = std::max(m_max.y, p.position.y);
+            m_max.z = std::max(m_max.z, p.position.z);
+        }
+    }
+
+    void center_camera() {
+        camera::position = 0.5f * (m_min + m_max) - glm::length(m_max - m_min) * camera::direction;
+    }
+};
+
+SceneBox scene_box;
 
 enum class VisibilityStatus {READY, RENDERING};
 
@@ -78,42 +108,50 @@ struct BufferedPath
     GLsync buffering_sync_fence;
 };
 
-const std::vector<std::array<float, 4>> Extrusion_Role_Colors{ {
-    { 0.90f, 0.70f, 0.70f, 1.0f },   // None
-    { 1.00f, 0.90f, 0.30f, 1.0f },   // Perimeter
-    { 1.00f, 0.49f, 0.22f, 1.0f },   // ExternalPerimeter
-    { 0.12f, 0.12f, 1.00f, 1.0f },   // OverhangPerimeter
-    { 0.69f, 0.19f, 0.16f, 1.0f },   // InternalInfill
-    { 0.59f, 0.33f, 0.80f, 1.0f },   // SolidInfill
-    { 0.94f, 0.25f, 0.25f, 1.0f },   // TopSolidInfill
-    { 1.00f, 0.55f, 0.41f, 1.0f },   // Ironing
-    { 0.30f, 0.50f, 0.73f, 1.0f },   // BridgeInfill
-    { 1.00f, 1.00f, 1.00f, 1.0f },   // GapFill
-    { 0.00f, 0.53f, 0.43f, 1.0f },   // Skirt
-    { 0.00f, 1.00f, 0.00f, 1.0f },   // SupportMaterial
-    { 0.00f, 0.50f, 0.00f, 1.0f },   // SupportMaterialInterface
-    { 0.70f, 0.89f, 0.67f, 1.0f },   // WipeTower
-    { 0.37f, 0.82f, 0.58f, 1.0f },   // Custom
+const std::vector<std::array<float, 3>> Extrusion_Role_Colors{ {
+    { 0.90f, 0.70f, 0.70f },   // None
+    { 1.00f, 0.90f, 0.30f },   // Perimeter
+    { 1.00f, 0.49f, 0.22f },   // ExternalPerimeter
+    { 0.12f, 0.12f, 1.00f },   // OverhangPerimeter
+    { 0.69f, 0.19f, 0.16f },   // InternalInfill
+    { 0.59f, 0.33f, 0.80f },   // SolidInfill
+    { 0.94f, 0.25f, 0.25f },   // TopSolidInfill
+    { 1.00f, 0.55f, 0.41f },   // Ironing
+    { 0.30f, 0.50f, 0.73f },   // BridgeInfill
+    { 1.00f, 1.00f, 1.00f },   // GapFill
+    { 0.00f, 0.53f, 0.43f },   // Skirt
+    { 0.00f, 1.00f, 0.00f },   // SupportMaterial
+    { 0.00f, 0.50f, 0.00f },   // SupportMaterialInterface
+    { 0.70f, 0.89f, 0.67f },   // WipeTower
+    { 0.37f, 0.82f, 0.58f },   // Custom
 } };
 
-const std::vector<std::array<float, 4>> Travel_Colors{ {
-    { 0.219f, 0.282f, 0.609f, 1.0f }, // Move
-    { 0.112f, 0.422f, 0.103f, 1.0f }, // Extrude
-    { 0.505f, 0.064f, 0.028f, 1.0f }  // Retract
+const std::vector<std::array<float, 3>> Travel_Colors{ {
+    { 0.219f, 0.282f, 0.609f }, // Move
+    { 0.112f, 0.422f, 0.103f }, // Extrude
+    { 0.505f, 0.064f, 0.028f }  // Retract
 } };
 
-const std::vector<std::array<float, 4>> Range_Colors{ {
-    { 0.043f, 0.173f, 0.478f, 1.0f }, // bluish
-    { 0.075f, 0.349f, 0.522f, 1.0f },
-    { 0.110f, 0.533f, 0.569f, 1.0f },
-    { 0.016f, 0.839f, 0.059f, 1.0f },
-    { 0.667f, 0.949f, 0.000f, 1.0f },
-    { 0.988f, 0.975f, 0.012f, 1.0f },
-    { 0.961f, 0.808f, 0.039f, 1.0f },
-    { 0.890f, 0.533f, 0.125f, 1.0f },
-    { 0.820f, 0.408f, 0.188f, 1.0f },
-    { 0.761f, 0.322f, 0.235f, 1.0f },
-    { 0.581f, 0.149f, 0.087f, 1.0f }  // reddish
+const std::vector<std::array<float, 3>> Range_Colors{ {
+    { 0.043f, 0.173f, 0.478f }, // bluish
+    { 0.075f, 0.349f, 0.522f },
+    { 0.110f, 0.533f, 0.569f },
+    { 0.016f, 0.839f, 0.059f },
+    { 0.667f, 0.949f, 0.000f },
+    { 0.988f, 0.975f, 0.012f },
+    { 0.961f, 0.808f, 0.039f },
+    { 0.890f, 0.533f, 0.125f },
+    { 0.820f, 0.408f, 0.188f },
+    { 0.761f, 0.322f, 0.235f },
+    { 0.581f, 0.149f, 0.087f }  // reddish
+} };
+
+const std::vector<std::array<float, 3>> Tools_Colors{ {
+    { 1.000f, 0.502f, 0.000f },
+    { 0.859f, 0.318f, 0.510f },
+    { 0.243f, 0.753f, 1.000f },
+    { 1.000f, 0.310f, 0.310f },
+    { 0.984f, 0.922f, 0.490f }
 } };
 
 class Range
@@ -138,12 +176,12 @@ public:
           return (m_max - m_min) / ((float)Range_Colors.size() - 1.0f);
     }
 
-    std::array<float, 4> get_color_at(float value, bool logarithmic = false) const {
+    std::array<float, 3> get_color_at(float value, bool logarithmic = false) const {
         // std::lerp is available with c++20
-        auto lerp = [](const std::array<float, 4>& a, const std::array<float, 4>& b, float t) {
+        auto lerp = [](const std::array<float, 3>& a, const std::array<float, 3>& b, float t) {
             t = std::clamp(t, 0.0f, 1.0f);
-            std::array<float, 4> ret;
-            for (int i = 0; i < 4; ++i) {
+            std::array<float, 3> ret;
+            for (int i = 0; i < 3; ++i) {
                 ret[i] = (1.0f - t) * a[i] + t * b[i];
             }
             return ret;
@@ -204,24 +242,24 @@ void set_ranges(const std::vector<PathPoint>& path_points)
 void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& path_points)
 {
     auto select_color = [](const PathPoint& p) {
-        static const std::array<float, 4> error_color = { 0.5f, 0.5f, 0.5f, 1.0f };
+        static const std::array<float, 3> error_color = { 0.5f, 0.5f, 0.5f };
         const unsigned int role = extract_role_from_flags(p.flags);
         const unsigned int type = extract_type_from_flags(p.flags);
         switch (config::visualization_type)
         {
-        // Feature type
+        // feature type
         case 0:
         {
             assert((p.is_travel_move() && role < Travel_Colors.size()) || (p.is_extrude_move() && role < Extrusion_Role_Colors.size()));
             return p.is_travel_move() ? Travel_Colors[role] : Extrusion_Role_Colors[role];
         }
-        // Height
+        // height
         case 1:
         {
             assert(!p.is_travel_move() || role < Travel_Colors.size());
             return p.is_travel_move() ? Travel_Colors[role] : height_range.get_color_at(p.height);
         }
-        // Width
+        // width
         case 2: 
         {
             assert(!p.is_travel_move() || role < Travel_Colors.size());
@@ -244,18 +282,26 @@ void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& pa
             assert(!p.is_travel_move() || role < Travel_Colors.size());
             return p.is_travel_move() ? Travel_Colors[role] : volumetricrate_range.get_color_at(p.volumetricrate);
         }
+        // tool
+        case 9: {
+            assert(p.extruderid < Tools_Colors.size());
+            return Tools_Colors[p.extruderid];
+        }
+        // color print
+        case 10: {
+            return Tools_Colors[p.colorid % Tools_Colors.size()];
+        }
         }
 
         return error_color;
     };
 
     auto format_color = [&](const PathPoint& p) {
-        const std::array<float, 4> color = select_color(p);
+        const std::array<float, 3> color = select_color(p);
         const int r = (int)(255.0f * color[0]);
         const int g = (int)(255.0f * color[1]);
         const int b = (int)(255.0f * color[2]);
-        const int a = (int)(255.0f * color[3]);
-        const int i_color = r << 24 | g << 16 | b << 8 | a;
+        const int i_color = r << 16 | g << 8 | b;
         return float(i_color);
     };
 
