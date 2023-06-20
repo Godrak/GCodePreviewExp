@@ -19,6 +19,7 @@ if(WIN)
 				-lwinpthread
 		)
 else()
+	set(WININCL glm glfw/include)
 	find_package (TBB REQUIRED)
 	set(LIBLINK glfw TBB::tbb)
 endif()
