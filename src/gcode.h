@@ -21,6 +21,7 @@
 #include <random>
 #include <iostream>
 #include <algorithm>
+#include <array>
 
 namespace gcode {
 
