@@ -61,10 +61,6 @@ void loadAndCompileShader(const std::string& source, GLuint& destination, GLenum
 		exit(-1);
 }
 
-
-#ifdef __linux__
-	#define USE_HARDCODED_PATHS "";
-#endif
 static const std::string shaders_path = USE_HARDCODED_PATHS;
 
 void createGCodeProgram() {
