@@ -54,6 +54,8 @@ struct PathPoint
     float fanspeed;
     float temperature;
     float volumetricrate;
+    unsigned int extruderid;
+    unsigned int colorid;
 
     unsigned int encode_flags(unsigned int role, unsigned int type) { flags = role << 0 | type << 8; return flags; }
     unsigned int role_from_flags() const { return extract_role_from_flags(flags); }
@@ -142,6 +144,14 @@ const std::vector<std::array<float, 3>> Range_Colors{ {
     { 0.820f, 0.408f, 0.188f },
     { 0.761f, 0.322f, 0.235f },
     { 0.581f, 0.149f, 0.087f }  // reddish
+} };
+
+const std::vector<std::array<float, 3>> Tools_Colors{ {
+    { 1.000f, 0.502f, 0.000f },
+    { 0.859f, 0.318f, 0.510f },
+    { 0.243f, 0.753f, 1.000f },
+    { 1.000f, 0.310f, 0.310f },
+    { 0.984f, 0.922f, 0.490f }
 } };
 
 class Range
@@ -237,19 +247,19 @@ void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& pa
         const unsigned int type = extract_type_from_flags(p.flags);
         switch (config::visualization_type)
         {
-        // Feature type
+        // feature type
         case 0:
         {
             assert((p.is_travel_move() && role < Travel_Colors.size()) || (p.is_extrude_move() && role < Extrusion_Role_Colors.size()));
             return p.is_travel_move() ? Travel_Colors[role] : Extrusion_Role_Colors[role];
         }
-        // Height
+        // height
         case 1:
         {
             assert(!p.is_travel_move() || role < Travel_Colors.size());
             return p.is_travel_move() ? Travel_Colors[role] : height_range.get_color_at(p.height);
         }
-        // Width
+        // width
         case 2: 
         {
             assert(!p.is_travel_move() || role < Travel_Colors.size());
@@ -271,6 +281,15 @@ void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& pa
         case 6: {
             assert(!p.is_travel_move() || role < Travel_Colors.size());
             return p.is_travel_move() ? Travel_Colors[role] : volumetricrate_range.get_color_at(p.volumetricrate);
+        }
+        // tool
+        case 9: {
+            assert(p.extruderid < Tools_Colors.size());
+            return Tools_Colors[p.extruderid];
+        }
+        // color print
+        case 10: {
+            return Tools_Colors[p.colorid % Tools_Colors.size()];
         }
         }
 

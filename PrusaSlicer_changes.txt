@@ -2,3 +2,4 @@ See:
 https://github.com/Prusa-Development/PrusaSlicerPrivate/commit/8523d2ebfa9a9d5d3913cedcbbe3802e1b8ff1eb
 https://github.com/Prusa-Development/PrusaSlicerPrivate/commit/d2d4e2c5865170903ce1f9a8ea2f1a21eb01df38
 https://github.com/Prusa-Development/PrusaSlicerPrivate/commit/b65f80c99ac31a623f5c09e971da422281cc4da9
+https://github.com/Prusa-Development/PrusaSlicerPrivate/commit/4a6c1a9dcf483f008ca8ed8626ce5aad2223d871
