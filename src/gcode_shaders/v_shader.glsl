@@ -9,15 +9,14 @@ uniform samplerBuffer positionsTex;
 uniform samplerBuffer heightWidthColorTex;
 uniform isamplerBuffer segmentIndexTex;
 
-vec4 decode_color(float color)
+vec3 decode_color(float color)
 {
 	int c = int(round(color));
-	int r = (c >> 24) & 0xFF;
-	int g = (c >> 16) & 0xFF;
-	int b = (c >> 8) & 0xFF;
-	int a = (c >> 0) & 0xFF;
+	int r = (c >> 16) & 0xFF;
+	int g = (c >> 8) & 0xFF;
+	int b = (c >> 0) & 0xFF;
 	float f = 1.0 / 255.0f;
-    return f * vec4(r, g, b, a);
+    return f * vec3(r, g, b);
 }
 
 in int vertex_id;
@@ -25,7 +24,7 @@ in int vertex_id;
 flat out int id_a;
 flat out int id_b;
 out vec3 pos;
-out vec4 color;
+out vec3 color;
 
 void main() {
     vec3 UP = vec3(0,0,1);

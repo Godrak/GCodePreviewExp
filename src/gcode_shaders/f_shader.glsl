@@ -14,7 +14,7 @@ uniform samplerBuffer heightWidthColorTex;
 flat in int id_a;
 flat in int id_b;
 in vec3 pos;
-in vec4 color;
+in vec3 color;
 
 out vec4 fragmentColor;
 
@@ -101,7 +101,7 @@ void main() {
 
     float diffuseFactor = max(dot(normal, light_top_dir), 0.0);
     float diffuseFactor2 = max(dot(normal, -light_front_dir), 0.0);
-    vec3 diffuse = color.rgb * (ambient + light_top_diffuse * diffuseFactor + light_front_diffuse * diffuseFactor2);
+    vec3 diffuse = color * (ambient + light_top_diffuse * diffuseFactor + light_front_diffuse * diffuseFactor2);
 
     vec4 clip = view_projection * vec4(surface_point, 1.0);
 
@@ -111,7 +111,7 @@ void main() {
     gl_FragDepth = ((gl_DepthRange.diff * clip.z / clip.w) + gl_DepthRange.near + gl_DepthRange.far) / 2.0;
     #endif
 
-    fragmentColor = vec4(diffuse, color.a);
+    fragmentColor = vec4(diffuse, 1.0);
 
 }
 
