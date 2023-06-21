@@ -56,6 +56,8 @@
 #include "shaders.h"
 
 namespace glfwContext {
+Camera camera;
+
 GLFWwindow *window{nullptr};
 char        forth_back{' '};
 char        left_right{' '};
@@ -117,11 +119,11 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
             break;
         }
         case GLFW_KEY_KP_ADD: {
-            camera::stepSize *= 2.0f;
+            camera.stepSize *= 2.0f;
             break;
         }
         case GLFW_KEY_KP_SUBTRACT: {
-            camera::stepSize *= 0.5f;
+            camera.stepSize *= 0.5f;
             break;
         }
         case GLFW_KEY_LEFT: {
@@ -200,8 +202,8 @@ static void glfw_cursor_position_callback(GLFWwindow *window, double xpos, doubl
             glm::vec2 offset;
             offset[0] = (float)(-xpos + last_xpos);
             offset[1] = (float)(ypos - last_ypos);
-            offset *= 0.001f * camera::rotationSpeed;
-            camera::moveCamera(offset);
+            offset *= 0.001f * camera.rotationSpeed;
+            camera.moveCamera(offset);
         }
     }
 
@@ -379,6 +381,31 @@ void show_sequential_sliders()
 
 namespace rendering {
 
+
+class SceneBox
+{
+    glm::vec3 m_min{ FLT_MAX, FLT_MAX, FLT_MAX };
+    glm::vec3 m_max{ -FLT_MAX, -FLT_MAX, -FLT_MAX };
+
+public:
+    void update(const std::vector<gcode::PathPoint>& points) {
+        for (const gcode::PathPoint& p : points) {
+            m_min.x = std::min(m_min.x, p.position.x);
+            m_min.y = std::min(m_min.y, p.position.y);
+            m_min.z = std::min(m_min.z, p.position.z);
+            m_max.x = std::max(m_max.x, p.position.x);
+            m_max.y = std::max(m_max.y, p.position.y);
+            m_max.z = std::max(m_max.z, p.position.z);
+        }
+    }
+
+    void center_camera() {
+        glfwContext::camera.position = 0.5f * (m_min + m_max) - glm::length(m_max - m_min) * glfwContext::camera.direction;
+    }
+};
+
+SceneBox scene_box;
+
 class FilteringWorker
 {
 public:
@@ -451,7 +478,6 @@ static size_t hope_unique(uint32_t *out, size_t len) {
     return pos;
 }
 
-glm::vec3 lastCameraPosition = camera::position;
 FilteringWorker filtering_worker{};
 
 std::vector<std::pair<size_t, size_t>> filtering_job_intervals;
@@ -482,20 +508,13 @@ void render(gcode::BufferedPath &path)
     glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
     checkGl();
 
-    camera::moveCamera(glfwContext::forth_back);
-    camera::moveCamera(glfwContext::up_down);
-    camera::moveCamera(glfwContext::left_right);
-    camera::moveCamera(glfwContext::top_view);
-
-    if (config::updateCameraPosition)
-        lastCameraPosition = camera::position;
-
-    glm::mat4x4 view_projection = glm::mat4x4(1.0);
-    camera::applyViewTransform(view_projection);
-    camera::applyProjectionTransform(view_projection);
+    glfwContext::camera.moveCamera(glfwContext::forth_back);
+    glfwContext::camera.moveCamera(glfwContext::up_down);
+    glfwContext::camera.moveCamera(glfwContext::left_right);
+    glfwContext::camera.moveCamera(glfwContext::top_view);
 
     if (config::camera_center_required) {
-        gcode::scene_box.center_camera();
+        scene_box.center_camera();
         config::camera_center_required = false;
     }
 
@@ -638,8 +657,10 @@ void render(gcode::BufferedPath &path)
             const int instance_base_id = ::glGetUniformLocation(shaderProgram::visibility_program, "instance_base");
             assert(instance_base_id >= 0);
 
+            auto view_projection = glfwContext::camera.get_view_projection();
+            auto camera_position = glfwContext::camera.position;
             glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
-            glUniform3fv(camera_position_id, 1, glm::value_ptr(lastCameraPosition));
+            glUniform3fv(camera_position_id, 1, glm::value_ptr(camera_position));
             // this tells the vertex shader to ignore visiblity values and render all lines instead
             glUniform1i(visibility_pass_id, true);
             glUniform1i(instance_base_id, (int)sequential_range.get_current_min() - 1);
@@ -713,8 +734,10 @@ void render(gcode::BufferedPath &path)
     const int visibility_pass_id = ::glGetUniformLocation(shaderProgram::gcode_program, "visibility_pass");
     assert(visibility_pass_id >= 0);
 
+    auto view_projection = glfwContext::camera.get_view_projection();
+    auto camera_position = glfwContext::camera.position;
     glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
-    glUniform3fv(camera_position_id, 1, glm::value_ptr(lastCameraPosition));
+    glUniform3fv(camera_position_id, 1, glm::value_ptr(camera_position));
     glUniform1i(visibility_pass_id, false);
     checkGl();
 
@@ -748,7 +771,7 @@ int main(int argc, char *argv[])
     const std::string filename = argv[1];
 
     auto points = readPathPoints(filename);
-    gcode::scene_box.update(points);
+    rendering::scene_box.update(points);
 
     glfwSetErrorCallback(glfwContext::glfw_error_callback);
     if (!glfwInit())
