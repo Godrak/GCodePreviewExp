@@ -25,12 +25,12 @@ void applyProjectionTransform(glm::mat4x4 &m) {
 	m = perspective * m;
 }
 
-//Has higher FOV
-void applyVisibilityProjectionTransform(glm::mat4x4 &m) {
-	glm::mat4x4 perspective = glm::perspective<float>(glm::radians(60.0f),
-			(float) globals::visibilityResolution.x / (float) globals::visibilityResolution.y, 1.0f, 1000.0f);
-	m = perspective * m;
-}
+// Has higher FOV
+// void applyVisibilityProjectionTransform(glm::mat4x4 &m) {
+// 	glm::mat4x4 perspective = glm::perspective<float>(glm::radians(45.0f),
+// 			(float) globals::visibilityResolution.x / (float) globals::visibilityResolution.y, 1.0f, 1000.0f);
+// 	m = perspective * m;
+// }
 
 void moveCamera(char c) {
 	switch (c) {

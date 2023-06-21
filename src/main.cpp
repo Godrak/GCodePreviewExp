@@ -454,11 +454,14 @@ static size_t hope_unique(uint32_t *out, size_t len) {
 glm::vec3 lastCameraPosition = camera::position;
 FilteringWorker filtering_worker{};
 
+std::vector<std::pair<size_t, size_t>> filtering_job_intervals;
+
 #define TIMINGS
 #ifdef TIMINGS
     bool rendering_finished = false;
     bool buffering_finished = false;
     bool filtering_finished = false;
+    size_t frames = 0;
 #endif
 
 void switchConfiguration()
@@ -487,9 +490,8 @@ void render(gcode::BufferedPath &path)
     if (config::updateCameraPosition)
         lastCameraPosition = camera::position;
 
-    glm::mat4x4 view = glm::mat4x4(1.0);
-    camera::applyViewTransform(view);
-    glm::mat4x4 view_projection = view;
+    glm::mat4x4 view_projection = glm::mat4x4(1.0);
+    camera::applyViewTransform(view_projection);
     camera::applyProjectionTransform(view_projection);
 
     if (config::camera_center_required) {
@@ -504,16 +506,18 @@ void render(gcode::BufferedPath &path)
         glGetSynciv(path.buffering_sync_fence, GL_SYNC_STATUS, sizeof(GLint), nullptr, &buffering_sync_status);
 
 #ifdef TIMINGS
+        frames++;
         if (!filtering_finished &&
             (!path.filtering_future.valid() || path.filtering_future.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready)) {
-            std::cout << "filtering finished " << glfwGetTime() << std::endl;
+            std::cout << "filtering finished frame " << frames << "  " << glfwGetTime() << std::endl;
+            filtering_finished = true;
         }
         if (!rendering_finished && rendering_sync_status == GL_SIGNALED) {
-            std::cout << "rendering (and buffering) finished " << glfwGetTime() << std::endl;
+            std::cout << "rendering (and buffering) finished frame " << frames << "  " << glfwGetTime() << std::endl;
             rendering_finished = true;
         }
         if (!buffering_finished && buffering_sync_status == GL_SIGNALED) {
-            std::cout << "buffering finished " << glfwGetTime() << std::endl;
+            std::cout << "buffering finished frame " << frames << "  " << glfwGetTime() << std::endl;
             buffering_finished = true;
         }
 #endif
@@ -522,18 +526,25 @@ void render(gcode::BufferedPath &path)
             (!path.filtering_future.valid() || path.filtering_future.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready)) {
 
 #ifdef TIMINGS
-            std::cout << "Visilibty render pass execution start " << glfwGetTime() << std::endl;
+            std::cout << "Visilibty render pass execution start frame " << frames << "  " << glfwGetTime() << std::endl;
             rendering_finished = false;
             buffering_finished = false;
             filtering_finished = false;
 #endif
             // update resolution if needed
-            auto new_vis_resolution = globals::screenResolution * 2;
+            auto new_vis_resolution = globals::screenResolution;
             if (new_vis_resolution != globals::visibilityResolution) {
                 globals::visibilityResolution = new_vis_resolution;
                 gcode::recreateVisibilityBufferOnResolutionChange();
                 glBufferData(GL_PIXEL_PACK_BUFFER, globals::visibilityResolution.x * globals::visibilityResolution.y * sizeof(unsigned int),
                              0, GL_STREAM_READ);
+                filtering_job_intervals.clear();
+                size_t total_pixel_count = globals::visibilityResolution.x * globals::visibilityResolution.y;
+                size_t job_pixel_count = total_pixel_count / std::thread::hardware_concurrency();
+                for (size_t i = 0; i*job_pixel_count < total_pixel_count; i++) {
+                    filtering_job_intervals.push_back({i * job_pixel_count, job_pixel_count});
+                }
+                filtering_job_intervals.back().second = total_pixel_count - filtering_job_intervals.back().first;
             }
 
             // START BUFFERING DATA WHICH ARE READY
@@ -552,24 +563,31 @@ void render(gcode::BufferedPath &path)
             GLint pixel_buffer_size;
             glGetBufferParameteriv(GL_PIXEL_PACK_BUFFER, GL_BUFFER_SIZE, &pixel_buffer_size);
             path.visiblity_vector.resize(pixel_buffer_size / sizeof(GLuint));
-            // Read the pixel data from the PBO into the std::vector
-            glGetBufferSubData(GL_PIXEL_PACK_BUFFER, 0, pixel_buffer_size, &path.visiblity_vector[0]);
+            if (path.visiblity_vector.size() > 0 &&
+                path.visiblity_vector.size() == globals::visibilityResolution.x * globals::visibilityResolution.y) {
+                // Read the pixel data from the PBO into the std::vector
+                glGetBufferSubData(GL_PIXEL_PACK_BUFFER, 0, pixel_buffer_size, &path.visiblity_vector[0]);
 
-            if (path.visiblity_vector.empty())
-                path.visiblity_vector.push_back(0);
-            path.filtering_future = filtering_worker.enqueue(
-                [](std::vector<glm::uint32> *vector_to_filter) {
-                    auto new_len = hope_unique(&vector_to_filter->front(), vector_to_filter->size());
-                    std::sort(std::execution::par_unseq, vector_to_filter->begin(), vector_to_filter->begin() + new_len);
-                    auto final_end = hope_unique(&vector_to_filter->front(), new_len);
-                    vector_to_filter->erase(vector_to_filter->begin() + final_end, vector_to_filter->end());
-                },
-                &path.visiblity_vector);
+                path.filtering_future = filtering_worker.enqueue(
+                    [](std::vector<glm::uint32> *vector_to_filter) {
+                        auto local_jobs = filtering_job_intervals;
+                        std::for_each(std::execution::par_unseq, local_jobs.begin(), local_jobs.end(), [&](std::pair<size_t, size_t> &job) {
+                            job.second = hope_unique(&(vector_to_filter->operator[](job.first)), job.second);
+                        });
+                        size_t new_len = 0;
+                        for (const std::pair<size_t, size_t> &job : local_jobs) {
+                            std::memcpy(&(vector_to_filter->operator[](new_len)), &(vector_to_filter->operator[](job.first)),
+                                        job.second * sizeof(glm::uint32));
+                            new_len += job.second;
+                        }
+                        std::sort(std::execution::par_unseq, vector_to_filter->begin(), vector_to_filter->begin() + new_len);
+                        auto final_end = hope_unique(&vector_to_filter->front(), new_len);
+                        vector_to_filter->erase(vector_to_filter->begin() + final_end, vector_to_filter->end());
+                    },
+                    &path.visiblity_vector);
+            }
 
             // VISBILITY RENDERING EXECUTION
-            glm::mat4x4 visiblity_view_projection = view;
-            camera::applyVisibilityProjectionTransform(visiblity_view_projection);
-
             // bind visibility framebuffer, clear it and render all lines
             glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
             checkGl();
@@ -620,7 +638,7 @@ void render(gcode::BufferedPath &path)
             const int instance_base_id = ::glGetUniformLocation(shaderProgram::visibility_program, "instance_base");
             assert(instance_base_id >= 0);
 
-            glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(visiblity_view_projection));
+            glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
             glUniform3fv(camera_position_id, 1, glm::value_ptr(lastCameraPosition));
             // this tells the vertex shader to ignore visiblity values and render all lines instead
             glUniform1i(visibility_pass_id, true);
