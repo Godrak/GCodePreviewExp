@@ -562,7 +562,7 @@ void render(gcode::BufferedPath &path)
             skipped_frames_due_to_target_fps_value ++;
         }
 
-        if (pipeline_finished && (current_fps >= glfwContext::fps_target_value || skipped_frames_due_to_target_fps_value > current_fps / 3)) {
+        if (pipeline_finished && (current_fps >= glfwContext::fps_target_value || skipped_frames_due_to_target_fps_value > current_fps)) {
             // DO THE VISIBILITY RENDERING
 
             skipped_frames_due_to_target_fps_value = 0;
