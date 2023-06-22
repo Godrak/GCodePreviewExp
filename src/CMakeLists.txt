@@ -18,6 +18,15 @@ if(WIN)
 				gdi32
 				-lwinpthread
 		)
+elseif(APPLE)
+	set(WININCL glm glfw/include)
+	find_package (TBB REQUIRED)
+	set(LIBLINK TBB::tbb
+		${CMAKE_CURRENT_SOURCE_DIR}/glfw/lib-osx/libglfw3.a 
+		"-framework Cocoa"
+		"-framework IOKit"
+		"-framework CoreVideo"
+	)
 else()
 	set(WININCL glm glfw/include)
 	find_package (TBB REQUIRED)

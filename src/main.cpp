@@ -20,8 +20,14 @@
 
 #include <GLFW/glfw3.h>
 
+#if __APPLE__
+#include <oneapi/dpl/algorithm>
+#include <oneapi/dpl/execution>
+#else
 #include <execution>
 #include <algorithm>
+#endif
+
 #include <chrono>
 #include <future>
 #include <mutex>
@@ -57,6 +63,7 @@
 
 namespace glfwContext {
 Camera camera;
+int fps_target_value;
 
 GLFWwindow *window{nullptr};
 char        forth_back{' '};
@@ -280,6 +287,11 @@ void show_config_window()
     if (ImGui::Button("Center view", { -1.0f, 0.0f })) {
         config::camera_center_required = true;
     }
+
+    ImGui::Text("Keep FPS above: ");
+    ImGui::SameLine();
+    ImGui::SliderInt("##slider_low", &glfwContext::fps_target_value, 0, 60, "%d", ImGuiSliderFlags_NoInput);
+
     ImGui::End();
     ImGui::PopStyleVar();
 }
@@ -479,6 +491,7 @@ static size_t hope_unique(uint32_t *out, size_t len) {
 }
 
 FilteringWorker filtering_worker{};
+size_t skipped_frames_due_to_target_fps_value = 0;
 
 std::vector<std::pair<size_t, size_t>> filtering_job_intervals;
 
@@ -540,9 +553,19 @@ void render(gcode::BufferedPath &path)
             buffering_finished = true;
         }
 #endif
+        bool pipeline_finished = rendering_sync_status == GL_SIGNALED && buffering_sync_status == GL_SIGNALED &&
+            (!path.filtering_future.valid() || path.filtering_future.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready);
 
-        if (rendering_sync_status == GL_SIGNALED && buffering_sync_status == GL_SIGNALED &&
-            (!path.filtering_future.valid() || path.filtering_future.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready)) {
+        size_t current_fps = (unsigned int) ImGui::GetCurrentContext()->IO.Framerate; 
+
+        if (pipeline_finished && current_fps < glfwContext::fps_target_value) {
+            skipped_frames_due_to_target_fps_value ++;
+        }
+
+        if (pipeline_finished && (current_fps >= glfwContext::fps_target_value || skipped_frames_due_to_target_fps_value > current_fps / 3)) {
+            // DO THE VISIBILITY RENDERING
+
+            skipped_frames_due_to_target_fps_value = 0;
 
 #ifdef TIMINGS
             std::cout << "Visilibty render pass execution start frame " << frames << "  " << glfwGetTime() << std::endl;
