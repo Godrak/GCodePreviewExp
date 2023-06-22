@@ -681,7 +681,9 @@ void render(gcode::BufferedPath &path)
 
             glUseProgram(0);
             glBindVertexArray(0);
+            
 
+            glfwContext::camera.clear_history();
 
 #ifdef TIMINGS
             std::cout << "Visilibty render pass execution END " << glfwGetTime() << std::endl;

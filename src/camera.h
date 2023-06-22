@@ -1,9 +1,11 @@
 #ifndef CAMERA_H_
 #define CAMERA_H_
 
+#include "glm/fwd.hpp"
 #include "globals.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <vector>
 
 
 static const glm::vec3 UP = { 0, 0, 1 };
@@ -16,7 +18,15 @@ struct Camera
     float     stepSize      = 0.5;
     float     rotationSpeed = 2;
 
-	glm::mat4x4 get_view_projection()const {
+    std::vector<char> movement_history{};
+    std::vector<glm::vec2> rotation_history{};
+
+    void clear_history() {
+        movement_history.clear();
+        rotation_history.clear();
+    }
+
+	glm::mat4x4 get_view_projection() const {
 		 auto view =  glm::lookAtRH(position, position + direction, up);
 		 auto perspective = glm::perspective<float>(glm::radians(45.0f),
                                                           (float) globals::screenResolution.x / (float) globals::screenResolution.y, 1.0f,
@@ -24,8 +34,21 @@ struct Camera
 		return perspective * view;
 	}
 
+    // std::pair<glm::mat4x4, glm::vec3> predict_view_projection_and_position() const
+    // {
+    //     float prediction_frames = 1; 
+    //     Camera predicted_camera = *this;
+    //     for (size_t i = 0; i < prediction_frames; i++) {
+    //         for (char move : movement_history)
+    //             predicted_camera.moveCamera(move);
+    //     }
+
+    //     return {predicted_camera.get_view_projection(), predicted_camera.position};
+    // }
+
     void moveCamera(char c)
     {
+        movement_history.push_back(c);
         switch (c) {
         case 'w': position += glm::normalize(direction) * stepSize; break;
         case 's': position -= glm::normalize(direction) * stepSize; break;
@@ -40,6 +63,7 @@ struct Camera
 
     void moveCamera(glm::vec2 offset)
     {
+        rotation_history.push_back(offset);
         auto step = glm::normalize(glm::cross(direction, up));
         step *= offset[0];
         direction = glm::normalize(direction - step);
