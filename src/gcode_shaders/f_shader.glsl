@@ -90,6 +90,7 @@ void main() {
     }
 
     vec3 normal = normalize(surface_point - last_center);
+    // normal = mix(normal, -ray_dir, clamp(length(camera_position - surface_point)/200.0, 0.0 , 1.0));
 
     vec3 light_top_dir = vec3(-0.4574957, 0.4574957, 0.7624929);
     float light_top_diffuse = 0.6*0.8;
