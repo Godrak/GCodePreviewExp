@@ -66,10 +66,11 @@ Camera camera;
 int fps_target_value;
 
 GLFWwindow *window{nullptr};
-char        forth_back{' '};
-char        left_right{' '};
-char        up_down{' '};
-char        top_view{' '};
+int         forth_back = 0;
+int         left_right = 0;
+int         up_down    = 0;
+int         top_view   = 0;
+bool middle_mouse_down = false;
 double      last_xpos{0.0};
 double      last_ypos{0.0};
 
@@ -98,27 +99,27 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
             break;
         }
         case GLFW_KEY_W: {
-            forth_back = ('w');
+            forth_back = 1;
             break;
         }
         case GLFW_KEY_S: {
-            forth_back = ('s');
+            forth_back = -1;
             break;
         }
         case GLFW_KEY_A: {
-            left_right = ('a');
+            left_right = -1;
             break;
         }
         case GLFW_KEY_D: {
-            left_right = ('d');
+            left_right = 1;
             break;
         }
         case GLFW_KEY_Q: {
-            up_down = ('q');
+            up_down = 1;
             break;
         }
         case GLFW_KEY_Z: {
-            up_down = ('z');
+            up_down = -1;
             break;
         }
         case GLFW_KEY_T: {
@@ -156,17 +157,17 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
         switch (key) {
         case GLFW_KEY_W:
         case GLFW_KEY_S: {
-            forth_back = ' ';
+            forth_back = 0;
             break;
         }
         case GLFW_KEY_A:
         case GLFW_KEY_D: {
-            left_right = ' ';
+            left_right = 0;
             break;
         }
         case GLFW_KEY_Q:
         case GLFW_KEY_Z: {
-            up_down = ' ';
+            up_down = 0;
             break;
         }
         case GLFW_KEY_T: {
@@ -205,12 +206,18 @@ static void glfw_cursor_position_callback(GLFWwindow *window, double xpos, doubl
     ImGui_ImplGlfw_CursorPosCallback(window, xpos, ypos);
 
     if (!ImGui::GetIO().WantCaptureMouse) {
-        if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL)) {
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) || glfwGetKey(window, GLFW_KEY_LEFT_CONTROL)) {
             glm::vec2 offset;
             offset[0] = (float)(-xpos + last_xpos);
             offset[1] = (float)(ypos - last_ypos);
-            offset *= 0.001f * camera.rotationSpeed;
-            camera.moveCamera(offset);
+            offset *= camera.rotationSpeed;
+            camera.rotateCamera(offset);
+        } else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT)) {
+            glm::vec2 offset;
+            offset[0] = (float)(-xpos + last_xpos);
+            offset[1] = (float) (ypos - last_ypos);
+            offset *= camera.stepSize;
+            camera.moveCamera({0.0, offset.x, offset.y});
         }
     }
 
@@ -221,6 +228,12 @@ static void glfw_cursor_position_callback(GLFWwindow *window, double xpos, doubl
 static void glfw_mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
+}
+
+//The callback function receives two-dimensional scroll offsets.
+void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    camera.zoomCamera(-yoffset);
 }
 
 static void glfw_window_iconify_callback(GLFWwindow* window, int value)
@@ -412,7 +425,8 @@ public:
     }
 
     void center_camera() {
-        glfwContext::camera.position = 0.5f * (m_min + m_max) - glm::length(m_max - m_min) * glfwContext::camera.direction;
+        glfwContext::camera.target =  0.5f * (m_min + m_max);
+        glfwContext::camera.position = m_max;
     }
 };
 
@@ -521,10 +535,7 @@ void render(gcode::BufferedPath &path)
     glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
     checkGl();
 
-    glfwContext::camera.moveCamera(glfwContext::forth_back);
-    glfwContext::camera.moveCamera(glfwContext::up_down);
-    glfwContext::camera.moveCamera(glfwContext::left_right);
-    glfwContext::camera.moveCamera(glfwContext::top_view);
+    glfwContext::camera.moveCamera({glfwContext::forth_back, glfwContext::left_right, glfwContext::up_down});
 
     if (config::camera_center_required) {
         scene_box.center_camera();
@@ -853,6 +864,8 @@ int main(int argc, char *argv[])
     glfwSetCursorPosCallback(window, glfwContext::glfw_cursor_position_callback);
     glfwSetMouseButtonCallback(window, glfwContext::glfw_mouse_button_callback);
     glfwSetWindowIconifyCallback(window, glfwContext::glfw_window_iconify_callback);
+    glfwSetScrollCallback(window, glfwContext::glfw_scroll_callback);
+
 
     ImGui_ImplOpenGL3_Init(glsl_version);
 
