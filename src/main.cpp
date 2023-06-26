@@ -606,24 +606,29 @@ void render(gcode::BufferedPath &path)
             std::swap(path.visible_segments_counts.first, path.visible_segments_counts.second);
             glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_doublebuffer.second);
             glBufferData(GL_TEXTURE_BUFFER, path.visible_segments_counts.second * sizeof(glm::uint32), nullptr, GL_STREAM_DRAW);
-            glBufferData(GL_TEXTURE_BUFFER, path.visiblity_vector.size() * sizeof(glm::uint32), path.visiblity_vector.data(), GL_STREAM_DRAW);
-            path.visible_segments_counts.second = path.visiblity_vector.size();
-            path.buffering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            glBufferData(GL_TEXTURE_BUFFER, path.visibility_vector.size() * sizeof(glm::uint32),
+                         path.visibility_vector.data(), GL_STREAM_DRAW);
+            path.visible_segments_counts.second = path.visibility_vector.size();
+            path.buffering_sync_fence           = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 
+            path.current_visibility_index = (path.current_visibility_index + 1) % path.visibility_vectors.size();
             // FILTERING DATA
             glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
             // Retrieve the size of the PBO buffer
             GLint pixel_buffer_size;
             glGetBufferParameteriv(GL_PIXEL_PACK_BUFFER, GL_BUFFER_SIZE, &pixel_buffer_size);
-            path.visiblity_vector.resize(pixel_buffer_size / sizeof(GLuint));
-            if (path.visiblity_vector.size() > 0 &&
-                path.visiblity_vector.size() == globals::visibilityResolution.x * globals::visibilityResolution.y) {
+            path.visibility_vectors[path.current_visibility_index].resize(pixel_buffer_size / sizeof(GLuint));
+            if (path.visibility_vectors[path.current_visibility_index].size() > 0 &&
+                path.visibility_vectors[path.current_visibility_index].size() ==
+                    globals::visibilityResolution.x * globals::visibilityResolution.y) {
                 // Read the pixel data from the PBO into the std::vector
-                glGetBufferSubData(GL_PIXEL_PACK_BUFFER, 0, pixel_buffer_size, &path.visiblity_vector[0]);
+                glGetBufferSubData(GL_PIXEL_PACK_BUFFER, 0, pixel_buffer_size, &(path.visibility_vectors[path.current_visibility_index][0]));
 
                 path.filtering_future = filtering_worker.enqueue(
-                    [](std::vector<glm::uint32> *vector_to_filter) {
-                        auto local_jobs = filtering_job_intervals;
+                    [](std::vector<glm::uint32> *filtering_vector, std::vector<std::vector<glm::uint32>> *visibility_vectors,
+                       size_t current_visibility_index) {
+                        auto  local_jobs       = filtering_job_intervals;
+                        auto *vector_to_filter = &(visibility_vectors->operator[](current_visibility_index));
                         std::for_each(std::execution::par_unseq, local_jobs.begin(), local_jobs.end(), [&](std::pair<size_t, size_t> &job) {
                             job.second = hope_unique(&(vector_to_filter->operator[](job.first)), job.second);
                         });
@@ -636,8 +641,23 @@ void render(gcode::BufferedPath &path)
                         std::sort(std::execution::par_unseq, vector_to_filter->begin(), vector_to_filter->begin() + new_len);
                         auto final_end = hope_unique(&vector_to_filter->front(), new_len);
                         vector_to_filter->erase(vector_to_filter->begin() + final_end, vector_to_filter->end());
+
+                        size_t size_sum = 0;
+                        for (size_t i = 0; i < visibility_vectors->size(); i++) {
+                            size_sum += visibility_vectors->operator[](i).size();
+                        }
+                        size_t filtering_end = 0;
+                        filtering_vector->resize(size_sum);
+                        for (size_t i = 0; i < visibility_vectors->size(); i++) {
+                            std::memcpy(&(filtering_vector->operator[](filtering_end)), &(visibility_vectors->operator[](i).front()),
+                                        visibility_vectors->operator[](i).size() * sizeof(glm::uint32));
+                            filtering_end += visibility_vectors->operator[](i).size();
+                        }
+                        std::sort(std::execution::par_unseq, filtering_vector->begin(), filtering_vector->end());
+                        filtering_end = hope_unique(&filtering_vector->front(), filtering_vector->size());
+                        filtering_vector->erase(filtering_vector->begin() + filtering_end, filtering_vector->end());
                     },
-                    &path.visiblity_vector);
+                    &path.visibility_vector, &path.visibility_vectors, path.current_visibility_index);
             }
 
             // VISBILITY RENDERING EXECUTION

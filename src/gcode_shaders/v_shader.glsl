@@ -85,7 +85,7 @@ void main() {
     float vsign = (vertex_id == 2 || vertex_id == 3 || vertex_id == 4) ? -1.0 : 1.0;
 
     // for visiblity pass, make the lines smaller, so that there are no holes in the result.
-    float h = (visibility_pass == 1) ? 0.4 : 0.5;
+    float h = (visibility_pass == 1) ? 0.5 : 0.5;
     vec3 height_width_color = texelFetch(heightWidthColorTex, id_final).xyz;
     float half_height = h * height_width_color.x;
     float half_width = h * height_width_color.y;
