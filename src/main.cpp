@@ -291,6 +291,8 @@ void show_config_window()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
     if (ImGui::Checkbox("with_visibility_pass", &config::with_visibility_pass)) {}
+    if (ImGui::Checkbox("force_full_model_render", &config::force_full_model_render)) {}
+    if (ImGui::Checkbox("use_cheap_frag_shader", &config::use_cheap_frag_shader)) {}
     if (ImGui::Checkbox("vsync", &config::vsync)) {}
     if (ImGui::Checkbox("use_travel_moves_data", &config::use_travel_moves_data)) {
         config::ranges_update_required = true;
@@ -541,7 +543,7 @@ void render(gcode::BufferedPath &path)
         config::camera_center_required = false;
     }
 
-    if (config::with_visibility_pass) {
+    if (config::with_visibility_pass && !config::force_full_model_render) {
         GLint rendering_sync_status;
         glGetSynciv(path.rendering_sync_fence, GL_SYNC_STATUS, sizeof(GLint), nullptr, &rendering_sync_status);
         GLint buffering_sync_status;
@@ -762,7 +764,11 @@ void render(gcode::BufferedPath &path)
     glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
     checkGl();
 
-    glUseProgram(shaderProgram::gcode_program);
+    if (config::use_cheap_frag_shader) {
+        glUseProgram(shaderProgram::cheap_program);
+    } else {
+        glUseProgram(shaderProgram::gcode_program);
+    }
     glBindVertexArray(gcode::gcodeVAO);
     checkGl();
 
@@ -787,8 +793,13 @@ void render(gcode::BufferedPath &path)
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_color_buffer);
 
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_BUFFER, path.visible_segments_texture);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_segments_doublebuffer.first);
+    if (config::force_full_model_render) {
+        glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
+    } else {
+        glBindTexture(GL_TEXTURE_BUFFER, path.visible_segments_texture);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_segments_doublebuffer.first);
+    }
 
     const int vp_id = ::glGetUniformLocation(shaderProgram::gcode_program, "view_projection");
     assert(vp_id >= 0);
@@ -804,8 +815,9 @@ void render(gcode::BufferedPath &path)
     glUniform1i(visibility_pass_id, false);
     checkGl();
 
-    if (path.visible_segments_counts.first > 0)
-        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data_size, (GLsizei)path.visible_segments_counts.first);
+    size_t segments_count = config::force_full_model_render ? path.enabled_segments_count : (GLsizei)path.visible_segments_counts.first;
+    if (segments_count > 0)
+        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data_size, segments_count);
     checkGl();
 
     glUseProgram(0);
@@ -816,6 +828,7 @@ void setup()
 {
     shaderProgram::createGCodeProgram();
     shaderProgram::createVisibilityProgram();
+    shaderProgram::createCheapProgram();
     gcode::init();
     checkGl();
 }

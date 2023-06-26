@@ -25,6 +25,8 @@ bool color_update_required = true;
 bool camera_center_required = true;
 bool use_travel_moves_data = true;
 bool window_minimized = false;
+bool force_full_model_render = false;
+bool use_cheap_frag_shader = false;
 
 size_t camera_prediction_frames = 4;
 size_t visiblity_multiframes_count = 10;
