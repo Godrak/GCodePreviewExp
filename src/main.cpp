@@ -509,13 +509,10 @@ size_t skipped_frames_due_to_target_fps_value = 0;
 
 std::vector<std::pair<size_t, size_t>> filtering_job_intervals;
 
-#define TIMINGS
-#ifdef TIMINGS
-    bool rendering_finished = false;
-    bool buffering_finished = false;
-    bool filtering_finished = false;
-    size_t frames = 0;
-#endif
+bool   rendering_finished = false;
+bool   buffering_finished = false;
+bool   filtering_finished = false;
+size_t frames             = 0;
 
 void switchConfiguration()
 {
@@ -548,25 +545,33 @@ void render(gcode::BufferedPath &path)
         GLint buffering_sync_status;
         glGetSynciv(path.buffering_sync_fence, GL_SYNC_STATUS, sizeof(GLint), nullptr, &buffering_sync_status);
 
-#ifdef TIMINGS
         frames++;
         if (!filtering_finished &&
             (!path.filtering_future.valid() || path.filtering_future.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready)) {
+#ifdef TIMINGS
             std::cout << "filtering finished frame " << frames << "  " << glfwGetTime() << std::endl;
+#endif
             filtering_finished = true;
         }
+
         if (!rendering_finished && rendering_sync_status == GL_SIGNALED) {
+#ifdef TIMINGS
             std::cout << "rendering (and buffering) finished frame " << frames << "  " << glfwGetTime() << std::endl;
+#endif
             rendering_finished = true;
         }
+
+        // preemptively swap buffers to display results asap!
         if (!buffering_finished && buffering_sync_status == GL_SIGNALED) {
+            std::swap(path.visible_segments_doublebuffer.first, path.visible_segments_doublebuffer.second);
+            std::swap(path.visible_segments_counts.first, path.visible_segments_counts.second);
+#ifdef TIMINGS
             std::cout << "buffering finished frame " << frames << "  " << glfwGetTime() << std::endl;
+#endif
             buffering_finished = true;
         }
-#endif
-        bool pipeline_finished = rendering_sync_status == GL_SIGNALED && buffering_sync_status == GL_SIGNALED &&
-            (!path.filtering_future.valid() || path.filtering_future.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready);
 
+        bool pipeline_finished = buffering_finished && filtering_finished && rendering_finished;
         size_t current_fps = (unsigned int) ImGui::GetCurrentContext()->IO.Framerate; 
 
         if (pipeline_finished && current_fps < glfwContext::fps_target_value) {
@@ -580,10 +585,11 @@ void render(gcode::BufferedPath &path)
 
 #ifdef TIMINGS
             std::cout << "Visilibty render pass execution start frame " << frames << "  " << glfwGetTime() << std::endl;
+#endif
             rendering_finished = false;
             buffering_finished = false;
             filtering_finished = false;
-#endif
+
             // update resolution if needed
             auto new_vis_resolution = globals::screenResolution;
             if (new_vis_resolution != globals::visibilityResolution) {
@@ -602,8 +608,7 @@ void render(gcode::BufferedPath &path)
 
             // START BUFFERING DATA WHICH ARE READY
             // first buffer is used for the final rendering of visble lines, second for buffering
-            std::swap(path.visible_segments_doublebuffer.first, path.visible_segments_doublebuffer.second);
-            std::swap(path.visible_segments_counts.first, path.visible_segments_counts.second);
+            // buffer swap should have been done as soon as the data is buffered, so it is done outside of this block
             glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_doublebuffer.second);
             glBufferData(GL_TEXTURE_BUFFER, path.visible_segments_counts.second * sizeof(glm::uint32), nullptr, GL_STREAM_DRAW);
             glBufferData(GL_TEXTURE_BUFFER, path.visibility_vector.size() * sizeof(glm::uint32),
