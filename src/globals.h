@@ -25,6 +25,9 @@ bool color_update_required = true;
 bool camera_center_required = true;
 bool use_travel_moves_data = true;
 bool window_minimized = false;
+
+size_t camera_prediction_frames = 4;
+size_t visiblity_multiframes_count = 10;
 }
 
 class SequentialRange

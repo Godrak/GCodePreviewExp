@@ -711,10 +711,10 @@ void render(gcode::BufferedPath &path)
             const int instance_base_id = ::glGetUniformLocation(shaderProgram::visibility_program, "instance_base");
             assert(instance_base_id >= 0);
 
-            auto view_projection = glfwContext::camera.get_view_projection();
+            auto view_projection_position = glfwContext::camera.predict_view_projection_and_position();
             auto camera_position = glfwContext::camera.position;
-            glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
-            glUniform3fv(camera_position_id, 1, glm::value_ptr(camera_position));
+            glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection_position.first));
+            glUniform3fv(camera_position_id, 1, glm::value_ptr(view_projection_position.second));
             // this tells the vertex shader to ignore visiblity values and render all lines instead
             glUniform1i(visibility_pass_id, true);
             glUniform1i(instance_base_id, (int)sequential_range.get_current_min() - 1);

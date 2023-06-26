@@ -77,7 +77,7 @@ struct BufferedPath
     GLuint visibility_pixel_buffer;
     glm::ivec2 visibility_texture_size; 
     
-    std::vector<std::vector<glm::uint32>> visibility_vectors = std::vector<std::vector<glm::uint32>>(10);
+    std::vector<std::vector<glm::uint32>> visibility_vectors = std::vector<std::vector<glm::uint32>>(config::visiblity_multiframes_count);
     std::vector<glm::uint32> visibility_vector{};
     size_t current_visibility_index = 0;
     std::future<void> filtering_future{};

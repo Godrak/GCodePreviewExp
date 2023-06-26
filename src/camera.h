@@ -37,17 +37,18 @@ struct Camera
 		return perspective * view;
 	}
 
-    // std::pair<glm::mat4x4, glm::vec3> predict_view_projection_and_position() const
-    // {
-    //     float prediction_frames = 1; 
-    //     Camera predicted_camera = *this;
-    //     for (size_t i = 0; i < prediction_frames; i++) {
-    //         for (char move : movement_history)
-    //             predicted_camera.moveCamera(move);
-    //     }
+    std::pair<glm::mat4x4, glm::vec3> predict_view_projection_and_position() const
+    {
+        Camera predicted_camera = *this;
+        for (size_t i = 0; i < config::camera_prediction_frames; i++) {
+            for (glm::vec3 move : movement_history)
+                predicted_camera.moveCamera(move);
+            for (glm::vec2 offset : rotation_history)
+                predicted_camera.rotateCamera(offset);
+        }
 
-    //     return {predicted_camera.get_view_projection(), predicted_camera.position};
-    // }
+        return {predicted_camera.get_view_projection(), predicted_camera.position};
+    }
 
     void moveCamera(glm::vec3 movements_vector)
     {
