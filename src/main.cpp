@@ -525,6 +525,8 @@ void switchConfiguration()
     }
 }
 
+#define TIMINGS
+
 void render(gcode::BufferedPath &path)
 {
     glfwGetFramebufferSize(glfwContext::window, &globals::screenResolution.x, &globals::screenResolution.y);
