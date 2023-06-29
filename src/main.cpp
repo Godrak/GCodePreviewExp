@@ -507,14 +507,6 @@ static size_t hope_unique(uint32_t *out, size_t len) {
 }
 
 FilteringWorker filtering_worker{};
-size_t skipped_frames_due_to_target_fps_value = 0;
-
-std::vector<std::pair<size_t, size_t>> filtering_job_intervals;
-
-bool   rendering_finished = false;
-bool   buffering_finished = false;
-bool   filtering_finished = false;
-size_t frames             = 0;
 
 void switchConfiguration()
 {
@@ -526,8 +518,6 @@ void switchConfiguration()
         checkGl();
     }
 }
-
-#define TIMINGS
 
 void render(gcode::BufferedPath &path)
 {
@@ -541,217 +531,6 @@ void render(gcode::BufferedPath &path)
     if (config::camera_center_required) {
         scene_box.center_camera();
         config::camera_center_required = false;
-    }
-
-    if (config::with_visibility_pass && !config::force_full_model_render) {
-        GLint rendering_sync_status;
-        glGetSynciv(path.rendering_sync_fence, GL_SYNC_STATUS, sizeof(GLint), nullptr, &rendering_sync_status);
-        GLint buffering_sync_status;
-        glGetSynciv(path.buffering_sync_fence, GL_SYNC_STATUS, sizeof(GLint), nullptr, &buffering_sync_status);
-
-        frames++;
-        if (!filtering_finished &&
-            (!path.filtering_future.valid() || path.filtering_future.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready)) {
-#ifdef TIMINGS
-            std::cout << "filtering finished frame " << frames << "  " << glfwGetTime() << std::endl;
-#endif
-            filtering_finished = true;
-        }
-
-        if (!rendering_finished && rendering_sync_status == GL_SIGNALED) {
-#ifdef TIMINGS
-            std::cout << "rendering (and buffering) finished frame " << frames << "  " << glfwGetTime() << std::endl;
-#endif
-            rendering_finished = true;
-        }
-
-        // preemptively swap buffers to display results asap!
-        if (!buffering_finished && buffering_sync_status == GL_SIGNALED) {
-            std::swap(path.visible_segments_doublebuffer.first, path.visible_segments_doublebuffer.second);
-            std::swap(path.visible_segments_counts.first, path.visible_segments_counts.second);
-#ifdef TIMINGS
-            std::cout << "buffering finished frame " << frames << "  " << glfwGetTime() << std::endl;
-#endif
-            buffering_finished = true;
-        }
-
-        bool pipeline_finished = buffering_finished && filtering_finished && rendering_finished;
-        size_t current_fps = (unsigned int) ImGui::GetCurrentContext()->IO.Framerate; 
-
-        if (pipeline_finished && current_fps < glfwContext::fps_target_value) {
-            skipped_frames_due_to_target_fps_value ++;
-        }
-
-        if (pipeline_finished && (current_fps >= glfwContext::fps_target_value || skipped_frames_due_to_target_fps_value > current_fps)) {
-            // DO THE VISIBILITY RENDERING
-
-            skipped_frames_due_to_target_fps_value = 0;
-
-#ifdef TIMINGS
-            std::cout << "Visilibty render pass execution start frame " << frames << "  " << glfwGetTime() << std::endl;
-#endif
-            rendering_finished = false;
-            buffering_finished = false;
-            filtering_finished = false;
-
-            // update resolution if needed
-            auto new_vis_resolution = globals::screenResolution;
-            if (new_vis_resolution != globals::visibilityResolution) {
-                globals::visibilityResolution = new_vis_resolution;
-                gcode::recreateVisibilityBufferOnResolutionChange();
-                glBufferData(GL_PIXEL_PACK_BUFFER, globals::visibilityResolution.x * globals::visibilityResolution.y * sizeof(unsigned int),
-                             0, GL_STREAM_READ);
-                filtering_job_intervals.clear();
-                size_t total_pixel_count = globals::visibilityResolution.x * globals::visibilityResolution.y;
-                size_t job_pixel_count = total_pixel_count / std::thread::hardware_concurrency();
-                for (size_t i = 0; i*job_pixel_count < total_pixel_count; i++) {
-                    filtering_job_intervals.push_back({i * job_pixel_count, job_pixel_count});
-                }
-                filtering_job_intervals.back().second = total_pixel_count - filtering_job_intervals.back().first;
-            }
-
-            // START BUFFERING DATA WHICH ARE READY
-            // first buffer is used for the final rendering of visble lines, second for buffering
-            // buffer swap should have been done as soon as the data is buffered, so it is done outside of this block
-            glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_doublebuffer.second);
-            glBufferData(GL_TEXTURE_BUFFER, path.visible_segments_counts.second * sizeof(glm::uint32), nullptr, GL_STREAM_DRAW);
-            glBufferData(GL_TEXTURE_BUFFER, path.visibility_vector.size() * sizeof(glm::uint32),
-                         path.visibility_vector.data(), GL_STREAM_DRAW);
-            path.visible_segments_counts.second = path.visibility_vector.size();
-            path.buffering_sync_fence           = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-
-            path.current_visibility_index = (path.current_visibility_index + 1) % path.visibility_vectors.size();
-            // FILTERING DATA
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
-            // Retrieve the size of the PBO buffer
-            GLint pixel_buffer_size;
-            glGetBufferParameteriv(GL_PIXEL_PACK_BUFFER, GL_BUFFER_SIZE, &pixel_buffer_size);
-            path.visibility_vectors[path.current_visibility_index].resize(pixel_buffer_size / sizeof(GLuint));
-            if (path.visibility_vectors[path.current_visibility_index].size() > 0 &&
-                path.visibility_vectors[path.current_visibility_index].size() ==
-                    globals::visibilityResolution.x * globals::visibilityResolution.y) {
-                // Read the pixel data from the PBO into the std::vector
-                glGetBufferSubData(GL_PIXEL_PACK_BUFFER, 0, pixel_buffer_size, &(path.visibility_vectors[path.current_visibility_index][0]));
-
-                path.filtering_future = filtering_worker.enqueue(
-                    [](std::vector<glm::uint32> *filtering_vector, std::vector<std::vector<glm::uint32>> *visibility_vectors,
-                       size_t current_visibility_index) {
-                        auto  local_jobs       = filtering_job_intervals;
-                        auto *vector_to_filter = &(visibility_vectors->operator[](current_visibility_index));
-                        std::for_each(std::execution::par_unseq, local_jobs.begin(), local_jobs.end(), [&](std::pair<size_t, size_t> &job) {
-                            job.second = hope_unique(&(vector_to_filter->operator[](job.first)), job.second);
-                        });
-                        size_t new_len = 0;
-                        for (const std::pair<size_t, size_t> &job : local_jobs) {
-                            std::memcpy(&(vector_to_filter->operator[](new_len)), &(vector_to_filter->operator[](job.first)),
-                                        job.second * sizeof(glm::uint32));
-                            new_len += job.second;
-                        }
-                        std::sort(std::execution::par_unseq, vector_to_filter->begin(), vector_to_filter->begin() + new_len);
-                        auto final_end = hope_unique(&vector_to_filter->front(), new_len);
-                        vector_to_filter->erase(vector_to_filter->begin() + final_end, vector_to_filter->end());
-
-                        size_t size_sum = 0;
-                        for (size_t i = 0; i < visibility_vectors->size(); i++) {
-                            size_sum += visibility_vectors->operator[](i).size();
-                        }
-                        size_t filtering_end = 0;
-                        filtering_vector->resize(size_sum);
-                        for (size_t i = 0; i < visibility_vectors->size(); i++) {
-                            std::memcpy(&(filtering_vector->operator[](filtering_end)), &(visibility_vectors->operator[](i).front()),
-                                        visibility_vectors->operator[](i).size() * sizeof(glm::uint32));
-                            filtering_end += visibility_vectors->operator[](i).size();
-                        }
-                        std::sort(std::execution::par_unseq, filtering_vector->begin(), filtering_vector->end());
-                        filtering_end = hope_unique(&filtering_vector->front(), filtering_vector->size());
-                        filtering_vector->erase(filtering_vector->begin() + filtering_end, filtering_vector->end());
-                    },
-                    &path.visibility_vector, &path.visibility_vectors, path.current_visibility_index);
-            }
-
-            // VISBILITY RENDERING EXECUTION
-            // bind visibility framebuffer, clear it and render all lines
-            glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
-            checkGl();
-            glEnable(GL_DEPTH_TEST);
-            glClearColor(0.0, 0.0, 0.0, 0.0); // This will be interpreted as one integer, probably from the first component. I am putting it
-                                              // here anyway, to make it clear
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            checkGl();
-            glViewport(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y);
-
-            // except for the different resolution and shader program, this render pass is same as the final GCode render.
-            // what happens here is that all boxes of all lines are rendered, but only the visible ones will have their ids written into the
-            // framebuffer
-            glUseProgram(shaderProgram::visibility_program);
-            glBindVertexArray(gcode::gcodeVAO);
-            checkGl();
-
-            const int positions_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "positionsTex");
-            assert(positions_tex_id >= 0);
-            const int height_width_color_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "heightWidthColorTex");
-            assert(height_width_color_tex_id >= 0);
-            const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "segmentIndexTex");
-            assert(segment_index_tex_id >= 0);
-
-            glUniform1i(positions_tex_id, 0);
-            glUniform1i(height_width_color_tex_id, 1);
-            glUniform1i(segment_index_tex_id, 2);
-            checkGl();
-
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_BUFFER, path.positions_texture);
-            glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
-
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_BUFFER, path.height_width_color_texture);
-            glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_color_buffer);
-
-            glActiveTexture(GL_TEXTURE2);
-            glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
-            glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
-
-            const int vp_id = ::glGetUniformLocation(shaderProgram::visibility_program, "view_projection");
-            assert(vp_id >= 0);
-            const int camera_position_id = ::glGetUniformLocation(shaderProgram::visibility_program, "camera_position");
-            assert(camera_position_id >= 0);
-            const int visibility_pass_id = ::glGetUniformLocation(shaderProgram::visibility_program, "visibility_pass");
-            assert(visibility_pass_id >= 0);
-            const int instance_base_id = ::glGetUniformLocation(shaderProgram::visibility_program, "instance_base");
-            assert(instance_base_id >= 0);
-
-            auto view_projection_position = glfwContext::camera.predict_view_projection_and_position();
-            auto camera_position = glfwContext::camera.position;
-            glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection_position.first));
-            glUniform3fv(camera_position_id, 1, glm::value_ptr(view_projection_position.second));
-            // this tells the vertex shader to ignore visiblity values and render all lines instead
-            glUniform1i(visibility_pass_id, true);
-            glUniform1i(instance_base_id, (int)sequential_range.get_current_min() - 1);
-            checkGl();
-
-            if (sequential_range.get_current_size() > 0)
-                glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data_size, (GLsizei)sequential_range.get_current_size());
-            checkGl();
-
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, path.visibility_pixel_buffer);
-            // https://www.khronos.org/opengl/wiki/Buffer_Object_Streaming    buffer respecification
-            glBufferData(GL_PIXEL_PACK_BUFFER, globals::visibilityResolution.x * globals::visibilityResolution.y * sizeof(unsigned int),
-                         nullptr, GL_STREAM_READ);
-            // Due to usage of PIXEL_PACK_BUFFER this should NOT be blocking call, it just tells OpenGL to stream the pixels into the buffer
-            glReadPixels(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
-
-            path.rendering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-
-            glUseProgram(0);
-            glBindVertexArray(0);
-            
-
-            glfwContext::camera.clear_history();
-
-#ifdef TIMINGS
-            std::cout << "Visilibty render pass execution END " << glfwGetTime() << std::endl;
-#endif
-        }
     }
 
     // Now render only the visible lines, with the expensive frag shader
@@ -793,13 +572,8 @@ void render(gcode::BufferedPath &path)
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_color_buffer);
 
     glActiveTexture(GL_TEXTURE2);
-    if (config::force_full_model_render) {
-        glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
-    } else {
-        glBindTexture(GL_TEXTURE_BUFFER, path.visible_segments_texture);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_segments_doublebuffer.first);
-    }
+    glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
 
     const int vp_id = ::glGetUniformLocation(shaderProgram::gcode_program, "view_projection");
     assert(vp_id >= 0);
@@ -815,9 +589,9 @@ void render(gcode::BufferedPath &path)
     glUniform1i(visibility_pass_id, false);
     checkGl();
 
-    size_t segments_count = config::force_full_model_render ? path.enabled_segments_count : (GLsizei)path.visible_segments_counts.first;
+    size_t segments_count = 100000;
     if (segments_count > 0)
-        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data_size, segments_count);
+        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, segments_count);
     checkGl();
 
     glUseProgram(0);
@@ -935,8 +709,8 @@ int main(int argc, char *argv[])
     // gcode::BufferedPath path = gcode::generateTestingPathPoints();
     gcode::BufferedPath path = gcode::bufferExtrusionPaths(points);
 
-    sequential_range.set_global_max(path.enabled_segments_count);
-    sequential_range.set_current_max(path.enabled_segments_count);
+    sequential_range.set_global_max(path.total_points_count);
+    sequential_range.set_current_max(path.total_points_count);
 
     std::cout << "PATHS BUFFERED" << std::endl;
 

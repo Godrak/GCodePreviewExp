@@ -6,11 +6,12 @@ cmake_minimum_required(VERSION 3.8.4)
 set (CMAKE_CXX_STANDARD 17)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package (glm REQUIRED PATHS glm/cmake/glm NO_DEFAULT_PATH)
+
 option(WIN "WIN" OFF)
 if(WIN)
 	set(BUILD_FOR_WIN TRUE)
 	set(BUILD_SHARED_LIBS OFF)
-	find_package (glm REQUIRED PATHS glm/cmake/glm NO_DEFAULT_PATH)
 	set(WININCL glm glfw/include)
 	set(LIBLINK ${CMAKE_CURRENT_SOURCE_DIR}/glfw/lib-mingw-w64/libglfw3.a 
 				${CMAKE_CURRENT_SOURCE_DIR}/glfw/lib-mingw-w64/libglfw3dll.a 

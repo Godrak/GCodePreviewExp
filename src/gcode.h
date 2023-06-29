@@ -9,16 +9,18 @@
 #ifndef GCODE_H_
 #define GCODE_H_
 
-#include "glad/glad.h"
+#include <limits>
+#include <sul/dynamic_bitset.hpp>
 
+#include "glad/glad.h"
 #include "globals.h"
 #include "camera.h"
 
-#include <sul/dynamic_bitset.hpp>
 
 #include <cstddef>
-#include <future>
 #include <glm/fwd.hpp>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <random>
 #include <iostream>
@@ -38,6 +40,7 @@ GLuint pathSSBObindPoint = 5;
 
 GLint vid_loc = 0;
 
+
 size_t vertex_data_size = 18;
 int vertex_data[] = {  
         0, 1, 2,  // left side of box (for common depiction of a box, where left, right and top sides are visible)
@@ -46,6 +49,45 @@ int vertex_data[] = {
         0, 4, 5, 
         0, 5, 6, // top side of box 
         0, 6, 1 };
+
+glm::vec3 unit_box_vertices[] = {
+    // Front face
+    glm::ivec3(0, 0, 1), // Bottom-left
+    glm::ivec3(1, 0, 1), // Bottom-right
+    glm::ivec3(1, 1, 1), // Top-right
+    glm::ivec3(0, 1, 1), // Top-left
+    //back face
+    glm::ivec3(0, 0, 0), // Bottom-left
+    glm::ivec3(1, 0, 0), // Bottom-right
+    glm::ivec3(1, 1, 0), // Top-right
+    glm::ivec3(0, 1, 0)  // Top-left
+};
+
+GLuint unit_box_indices[] = {
+    // Front face
+    0, 1, 2,  // First triangle
+    2, 3, 0,  // Second triangle
+
+    // Right face
+    1, 5, 6,  // First triangle
+    6, 2, 1,  // Second triangle
+
+    // Back face
+    7, 6, 5,  // First triangle
+    5, 4, 7,  // Second triangle
+
+    // Left face
+    4, 0, 3,  // First triangle
+    3, 7, 4,  // Second triangle
+
+    // Bottom face
+    4, 5, 1,  // First triangle
+    1, 0, 4,  // Second triangle
+
+    // Top face
+    3, 2, 6,  // First triangle
+    6, 7, 3   // Second triangle
+};
 
 struct PathPoint
 {
@@ -203,12 +245,15 @@ struct BufferedPath
     GLuint positions_texture, positions_buffer;
     GLuint height_width_color_texture, height_width_color_buffer;
     GLuint enabled_segments_texture, enabled_segments_buffer;
+    size_t total_points_count;
+    std::pair<size_t, sul::dynamic_bitset<>> enabled_lines;
 
-    GLuint visilibty_boxes_vertex_buffer, visilibty_boxes_index_buffer;
+    GLuint visibility_VAO;
+    GLuint visibility_boxes_vertex_buffer, visibility_boxes_index_buffer;
     std::vector<std::pair<glm::ivec3, std::vector<size_t>>> visibility_boxes_with_segments;
-    sul::dynamic_bitset<> visible_boxes;
-    sul::dynamic_bitset<> enabled_lines;
-    sul::dynamic_bitset<> visible_lines;
+
+    std::pair<size_t, sul::dynamic_bitset<>> visible_boxes;
+    std::pair<size_t, sul::dynamic_bitset<>> visible_lines;
 };
 
 void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& path_points)
@@ -294,27 +339,104 @@ void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& pa
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
 }
 
+std::vector<glm::ivec3> get_covered_voxels(const glm::vec3 &a, const glm::vec3 &b)
+{
+    glm::vec3 start = a / config::voxel_size;
+    glm::vec3 end   = b / config::voxel_size;
+
+    glm::vec3 dir    = end - start;
+    float     length = dir.length();
+    dir              = dir / length;
+
+    glm::vec3 tmp   = glm::abs(dir);
+    int       steps = int(std::max(tmp.z, std::max(tmp.x, tmp.y)));
+
+    // Calculate the increment values for each step
+    glm::vec3 increment = dir / float(steps);
+
+    glm::vec3               current = start;
+    std::vector<glm::ivec3> result;
+    for (size_t i = 0; i < steps; i++) {
+        result.push_back({current});
+        current += increment;
+    }
+
+    return result;
+}
+
 BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     BufferedPath result;
 
     std::vector<glm::vec3> positions;
     std::vector<glm::vec3> height_width_color;
-    std::vector<glm::uint32> enabled_segments;
+
+    result.enabled_lines = {path_points.size(), sul::dynamic_bitset<>(path_points.size())};
+    result.enabled_lines.second.set(true);
+
+    std::unordered_map<glm::ivec3, std::unordered_set<size_t>> visibility_boxes;
+
+    // fill first position with empty box. This is to ensure that we can use 0 as clear value for visilibty framebuffer
+    glm::ivec3 max_coords{std::numeric_limits<int>::min(), std::numeric_limits<int>::min(), std::numeric_limits<int>::min()};
+    visibility_boxes[max_coords] = {};
 
     for (size_t i = 0; i < path_points.size(); i++) {
-        if (i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position)
-            enabled_segments.push_back((glm::uint32)positions.size());
+        if (i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position) {
+            // there is a valid path between point i and i+1.
+            auto covered = get_covered_voxels(path_points[i].position, path_points[i + 1].position);
+            for (const auto &coords : covered) {
+                visibility_boxes[coords].insert(i);
+            }
+        } else {
+            // the connection is invalid, there should be no line rendered
+            result.enabled_lines.second[i] = false;
+        }
 
-        const PathPoint& p = path_points[i];
-        positions.push_back({ p.position });
+        const PathPoint &p = path_points[i];
+        positions.push_back({p.position});
         const float height = p.is_travel_move() ? 0.1f : p.height;
         const float width  = p.is_travel_move() ? 0.1f : p.width;
 
-        height_width_color.push_back({ height, width, 0.0f }); // color will be set later with updatePathColors()
+        height_width_color.push_back({height, width, 0.0f}); // color will be set later with updatePathColors()
     }
 
-    glBindVertexArray(gcodeVAO);
+    result.total_points_count = path_points.size();
 
+    // VISIBILITY BOXES DATA
+    {
+        for (const auto &pair : visibility_boxes) {
+            result.visibility_boxes_with_segments.push_back({pair.first, {pair.second.begin(), pair.second.end()}});
+        };
+
+        std::vector<glm::vec4> boxes_positions_w_ids;
+        std::vector<GLuint>    boxes_indices;
+
+        for (size_t box_index = 0; box_index < result.visibility_boxes_with_segments.size(); box_index++) {
+            size_t     indices_offset = boxes_positions_w_ids.size();
+            glm::ivec3 coords         = result.visibility_boxes_with_segments[box_index].first;
+            for (glm::ivec3 coord_offset : unit_box_vertices) {
+                glm::vec3 final_pos = glm::vec3(coords + coord_offset) * config::voxel_size;
+                boxes_positions_w_ids.push_back({final_pos.x, final_pos.y, final_pos.z, box_index});
+            }
+            for (GLuint index : unit_box_indices) {
+                boxes_indices.push_back(indices_offset + index);
+            }
+        }
+        glGenVertexArrays(1, &result.visibility_VAO);
+        glBindVertexArray(result.visibility_VAO);
+
+        glGenBuffers(1, &result.visibility_boxes_vertex_buffer);
+        glBindBuffer(GL_ARRAY_BUFFER, result.visibility_boxes_vertex_buffer);
+        glBufferData(GL_ARRAY_BUFFER, boxes_positions_w_ids.size() * sizeof(glm::vec4), boxes_positions_w_ids.data(), GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void *) 0);
+
+        glGenBuffers(1, &result.visibility_boxes_index_buffer);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, result.visibility_boxes_index_buffer);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, boxes_indices.size() * sizeof(GLuint), boxes_indices.data(), GL_STATIC_DRAW);
+    }
+
+    ///GCODE DATA
+    glBindVertexArray(gcodeVAO);
     // Create a buffer object and bind it to the texture buffer
     glGenBuffers(1, &result.positions_buffer);
     glBindBuffer(GL_TEXTURE_BUFFER, result.positions_buffer);
@@ -354,9 +476,6 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
    // Create a buffer object and bind it to the texture buffer
     glGenBuffers(1, &result.enabled_segments_buffer);
     glBindBuffer(GL_TEXTURE_BUFFER, result.enabled_segments_buffer);
-
-    // buffer data to the path buffer
-    glBufferData(GL_TEXTURE_BUFFER, enabled_segments.size() * sizeof(glm::uint32), enabled_segments.data(), GL_STATIC_DRAW);
 
     // Create and bind the path texture
     glGenTextures(1, &result.enabled_segments_texture);
@@ -408,7 +527,7 @@ void recreateVisibilityBufferOnResolutionChange()
     glActiveTexture(GL_TEXTURE1);
     glGenTextures(1, &instanceIdsTexture);
     glBindTexture(GL_TEXTURE_2D, instanceIdsTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, globals::visibilityResolution.x, globals::visibilityResolution.y, 0, GL_RED_INTEGER, GL_UNSIGNED_INT,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, globals::screenResolution.x, globals::screenResolution.y, 0, GL_RED_INTEGER, GL_UNSIGNED_INT,
                  nullptr);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, instanceIdsTexture, 0);
 
@@ -417,7 +536,7 @@ void recreateVisibilityBufferOnResolutionChange()
     glActiveTexture(GL_TEXTURE2);
     glGenTextures(1, &depthTexture);
     glBindTexture(GL_TEXTURE_2D, depthTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::visibilityResolution.x, globals::visibilityResolution.y, 0,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::screenResolution.x, globals::screenResolution.y, 0,
                  GL_DEPTH_COMPONENT, GL_FLOAT, 0);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
 

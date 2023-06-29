@@ -3,7 +3,9 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
+#include "glm/glm.hpp"
+#define GLM_ENABLE_EXPERIMENTAL
+#include "glm/gtx/hash.hpp"
 
 #include <iostream>
 #include <algorithm>
@@ -28,6 +30,8 @@ bool use_cheap_frag_shader = false;
 
 size_t camera_prediction_frames = 4;
 size_t visiblity_multiframes_count = 10;
+
+float voxel_size = 10;
 }
 
 class SequentialRange
