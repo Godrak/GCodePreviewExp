@@ -533,6 +533,22 @@ void render(gcode::BufferedPath &path)
         config::camera_center_required = false;
     }
 
+
+
+
+    //  Temporary testing data buffering
+    std::vector<size_t> visible_indices;
+    for (size_t i = 0; i < 100000; i++) {
+        visible_indices.push_back(i);
+    }
+    glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_segments_buffer);
+    glBufferData(GL_TEXTURE_BUFFER, visible_indices.size() * sizeof(size_t), visible_indices.data(), GL_STREAM_DRAW);
+
+
+
+
+
+
     // Now render only the visible lines, with the expensive frag shader
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     checkGl();
