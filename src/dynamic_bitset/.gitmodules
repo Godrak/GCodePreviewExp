@@ -1,0 +1,9 @@
+[submodule "extlibs/Catch2"]
+	path = extlibs/Catch2
+	url = https://github.com/catchorg/Catch2
+[submodule "extlibs/libpopcnt"]
+	path = extlibs/libpopcnt
+	url = https://github.com/kimwalisch/libpopcnt
+[submodule "docs/doxygen-awesome-css"]
+	path = docs/doxygen-awesome-css
+	url = https://github.com/jothepro/doxygen-awesome-css

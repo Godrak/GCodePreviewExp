@@ -37,6 +37,8 @@ file(GLOB_RECURSE GLAD_SOURCES "glad/src/glad.c" "glad/*.h")
 add_library(glad ${GLAD_SOURCES})
 target_include_directories(glad PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/glad/include)
 
+add_subdirectory(dynamic_bitset)
+
 file(GLOB IMGUI_SOURCES "imgui/*.cpp" "imgui/*.h")
 add_library(imgui ${IMGUI_SOURCES})
 target_link_libraries(imgui PUBLIC glad)
@@ -44,8 +46,9 @@ target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui ${WINI
 
 add_definitions(-DUSE_HARDCODED_PATHS="")
 
+
 add_executable(GCdeView main.cpp)
-target_link_libraries(GCdeView PUBLIC glad imgui ${LIBLINK})
+target_link_libraries(GCdeView PUBLIC glad imgui ${LIBLINK} sul::dynamic_bitset)
 target_include_directories(GCdeView PUBLIC ${WININCL})
 if(WIN)
 	target_link_options(GCdeView PUBLIC -static-libgcc -static-libstdc++ -static -Bstatic -lpthread)

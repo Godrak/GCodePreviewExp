@@ -14,6 +14,8 @@
 #include "globals.h"
 #include "camera.h"
 
+#include <sul/dynamic_bitset.hpp>
+
 #include <cstddef>
 #include <future>
 #include <glm/fwd.hpp>
@@ -63,26 +65,6 @@ struct PathPoint
     unsigned int type_from_flags() const { return extract_type_from_flags(flags); }
     bool is_travel_move() const  { return extract_type_from_flags(flags) == 8; }
     bool is_extrude_move() const { return extract_type_from_flags(flags) == 10; }
-};
-
-struct BufferedPath
-{
-    GLuint positions_texture, positions_buffer;
-    GLuint height_width_color_texture, height_width_color_buffer;
-    GLuint enabled_segments_texture, enabled_segments_buffer;
-    size_t enabled_segments_count = 0;
-    GLuint visible_segments_texture;
-    std::pair<GLuint, GLuint> visible_segments_doublebuffer;
-    std::pair<size_t, size_t> visible_segments_counts = {0,0};
-    GLuint visibility_pixel_buffer;
-    glm::ivec2 visibility_texture_size; 
-    
-    std::vector<std::vector<glm::uint32>> visibility_vectors = std::vector<std::vector<glm::uint32>>(config::visiblity_multiframes_count);
-    std::vector<glm::uint32> visibility_vector{};
-    size_t current_visibility_index = 0;
-    std::future<void> filtering_future{};
-    GLsync rendering_sync_fence;
-    GLsync buffering_sync_fence;
 };
 
 const std::vector<std::array<float, 3>> Extrusion_Role_Colors{ {
@@ -216,6 +198,19 @@ void set_ranges(const std::vector<PathPoint>& path_points)
     }
 }
 
+struct BufferedPath
+{
+    GLuint positions_texture, positions_buffer;
+    GLuint height_width_color_texture, height_width_color_buffer;
+    GLuint enabled_segments_texture, enabled_segments_buffer;
+
+    GLuint visilibty_boxes_vertex_buffer, visilibty_boxes_index_buffer;
+    std::vector<std::pair<glm::ivec3, std::vector<size_t>>> visibility_boxes_with_segments;
+    sul::dynamic_bitset<> visible_boxes;
+    sul::dynamic_bitset<> enabled_lines;
+    sul::dynamic_bitset<> visible_lines;
+};
+
 void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& path_points)
 {
     auto select_color = [](const PathPoint& p) {
@@ -318,8 +313,6 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
         height_width_color.push_back({ height, width, 0.0f }); // color will be set later with updatePathColors()
     }
 
-    result.enabled_segments_count = enabled_segments.size();
-
     glBindVertexArray(gcodeVAO);
 
     // Create a buffer object and bind it to the texture buffer
@@ -375,15 +368,6 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     // Unbind the buffer object and the texture buffer
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
-
-    // Create a buffer object and bind it to the texture buffer
-    glGenBuffers(1, &result.visible_segments_doublebuffer.first);
-    glGenBuffers(1, &result.visible_segments_doublebuffer.second);
-    glGenTextures(1, &result.enabled_segments_texture);
-    glGenBuffers(1, &result.visibility_pixel_buffer);
-
-    result.rendering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-    result.buffering_sync_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 
     glBindVertexArray(0);
 
