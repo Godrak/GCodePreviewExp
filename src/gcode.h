@@ -339,29 +339,76 @@ void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& pa
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
 }
 
-std::vector<glm::ivec3> get_covered_voxels(const glm::vec3 &a, const glm::vec3 &b)
+std::vector<glm::ivec3> get_covered_voxels(const glm::vec3 &ray_start, const glm::vec3 &ray_end)
 {
-    glm::vec3 start = a / config::voxel_size;
-    glm::vec3 end   = b / config::voxel_size;
+    std::vector<glm::ivec3> visited_voxels;
 
-    glm::vec3 dir    = end - start;
-    float     length = dir.length();
-    dir              = dir / length;
+    glm::ivec3 current_voxel(std::floor(ray_start.x / config::voxel_size), std::floor(ray_start.y / config::voxel_size),
+                             std::floor(ray_start.z / config::voxel_size));
 
-    glm::vec3 tmp   = glm::abs(dir);
-    int       steps = int(std::max(tmp.z, std::max(tmp.x, tmp.y)));
+    glm::ivec3 last_voxel(std::floor(ray_end.x / config::voxel_size), std::floor(ray_end.y / config::voxel_size),
+                          std::floor(ray_end.z / config::voxel_size));
 
-    // Calculate the increment values for each step
-    glm::vec3 increment = dir / float(steps);
+    glm::dvec3 ray = ray_end - ray_start;
 
-    glm::vec3               current = start;
-    std::vector<glm::ivec3> result;
-    for (size_t i = 0; i < steps; i++) {
-        result.push_back({current});
-        current += increment;
+    double stepX = (ray.x >= 0) ? 1 : -1;
+    double stepY = (ray.y >= 0) ? 1 : -1;
+    double stepZ = (ray.z >= 0) ? 1 : -1;
+
+    double next_voxel_boundary_x = (current_voxel.x + stepX) * config::voxel_size;
+    double next_voxel_boundary_y = (current_voxel.y + stepY) * config::voxel_size;
+    double next_voxel_boundary_z = (current_voxel.z + stepZ) * config::voxel_size;
+
+    double tMaxX = (ray.x != 0) ? (next_voxel_boundary_x - ray_start.x) / ray.x : DBL_MAX;
+    double tMaxY = (ray.y != 0) ? (next_voxel_boundary_y - ray_start.y) / ray.y : DBL_MAX;
+    double tMaxZ = (ray.z != 0) ? (next_voxel_boundary_z - ray_start.z) / ray.z : DBL_MAX;
+
+    double tDeltaX = (ray.x != 0) ? config::voxel_size / ray.x * stepX : DBL_MAX;
+    double tDeltaY = (ray.y != 0) ? config::voxel_size / ray.y * stepY : DBL_MAX;
+    double tDeltaZ = (ray.z != 0) ? config::voxel_size / ray.z * stepZ : DBL_MAX;
+
+    glm::ivec3 diff(0, 0, 0);
+    bool       neg_ray = false;
+    if (current_voxel.x != last_voxel.x && ray.x < 0) {
+        diff.x--;
+        neg_ray = true;
+    }
+    if (current_voxel.y != last_voxel.y && ray.y < 0) {
+        diff.y--;
+        neg_ray = true;
+    }
+    if (current_voxel.z != last_voxel.z && ray.z < 0) {
+        diff.z--;
+        neg_ray = true;
+    }
+    visited_voxels.push_back(current_voxel);
+    if (neg_ray) {
+        current_voxel += diff;
+        visited_voxels.push_back(current_voxel);
     }
 
-    return result;
+    while (last_voxel != current_voxel) {
+        if (tMaxX < tMaxY) {
+            if (tMaxX < tMaxZ) {
+                current_voxel.x += stepX;
+                tMaxX += tDeltaX;
+            } else {
+                current_voxel.z += stepZ;
+                tMaxZ += tDeltaZ;
+            }
+        } else {
+            if (tMaxY < tMaxZ) {
+                current_voxel.y += stepY;
+                tMaxY += tDeltaY;
+            } else {
+                current_voxel.z += stepZ;
+                tMaxZ += tDeltaZ;
+            }
+        }
+        visited_voxels.push_back(current_voxel);
+    }
+
+    return visited_voxels;
 }
 
 BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
