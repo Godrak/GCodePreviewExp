@@ -521,11 +521,6 @@ void switchConfiguration()
 
 void render(gcode::BufferedPath &path)
 {
-    glfwGetFramebufferSize(glfwContext::window, &globals::screenResolution.x, &globals::screenResolution.y);
-    checkGl();
-    glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
-    checkGl();
-
     glfwContext::camera.moveCamera({glfwContext::forth_back, glfwContext::left_right, glfwContext::up_down});
 
     if (config::camera_center_required) {
@@ -533,9 +528,16 @@ void render(gcode::BufferedPath &path)
         config::camera_center_required = false;
     }
 
+    glm::ivec2 new_size;
+    glfwGetFramebufferSize(glfwContext::window, &new_size.x, &new_size.y);
+    checkGl();
+    if (new_size != globals::screenResolution) {
+        globals::screenResolution = new_size;
+        glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
+        gcode::recreateVisibilityBufferOnResolutionChange();
+    }
+
     if (config::with_visibility_pass) {
-
-
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         checkGl();
         glEnable(GL_DEPTH_TEST);
@@ -544,6 +546,13 @@ void render(gcode::BufferedPath &path)
         checkGl();
         glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
         checkGl();
+
+        glBindBuffer(GL_TEXTURE_BUFFER, path.visibility_boxes_buffer);
+        glBufferData(GL_TEXTURE_BUFFER, path.visible_boxes.first / (sizeof(GLuint) * 8), path.visible_boxes.second.data(), GL_STREAM_DRAW);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_BUFFER, path.visibility_boxes_texture);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visibility_boxes_buffer);
 
         glUseProgram(shaderProgram::visibility_program);
         glBindVertexArray(path.visibility_VAO);
@@ -556,85 +565,77 @@ void render(gcode::BufferedPath &path)
         glDrawElements(GL_TRIANGLES, path.index_buffer_size, GL_UNSIGNED_INT, 0);
 
     } else {
+        //  Temporary testing data buffering
+        std::vector<size_t> visible_indices;
+        for (size_t i = 0; i < 100000; i++) {
+            visible_indices.push_back(i);
+        }
+        glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_segments_buffer);
+        glBufferData(GL_TEXTURE_BUFFER, visible_indices.size() * sizeof(size_t), visible_indices.data(), GL_STREAM_DRAW);
 
+        // Now render only the visible lines, with the expensive frag shader
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        checkGl();
+        glEnable(GL_DEPTH_TEST);
+        glClearColor(0.6f, 0.6f, 0.6f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        checkGl();
+        glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
+        checkGl();
 
-    //  Temporary testing data buffering
-    std::vector<size_t> visible_indices;
-    for (size_t i = 0; i < 100000; i++) {
-        visible_indices.push_back(i);
-    }
-    glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_segments_buffer);
-    glBufferData(GL_TEXTURE_BUFFER, visible_indices.size() * sizeof(size_t), visible_indices.data(), GL_STREAM_DRAW);
+        if (config::use_cheap_frag_shader) {
+            glUseProgram(shaderProgram::cheap_program);
+        } else {
+            glUseProgram(shaderProgram::gcode_program);
+        }
+        glBindVertexArray(gcode::gcodeVAO);
+        checkGl();
 
+        const int positions_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "positionsTex");
+        assert(positions_tex_id >= 0);
+        const int height_width_color_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthColorTex");
+        assert(height_width_color_tex_id >= 0);
+        const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "segmentIndexTex");
+        assert(segment_index_tex_id >= 0);
 
+        glUniform1i(positions_tex_id, 0);
+        glUniform1i(height_width_color_tex_id, 1);
+        glUniform1i(segment_index_tex_id, 2);
+        checkGl();
 
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_BUFFER, path.positions_texture);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
 
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_BUFFER, path.height_width_color_texture);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_color_buffer);
 
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
 
-    // Now render only the visible lines, with the expensive frag shader
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    checkGl();
-    glEnable(GL_DEPTH_TEST);
-    glClearColor(0.6f, 0.6f, 0.6f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    checkGl();
-    glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
-    checkGl();
+        const int vp_id = ::glGetUniformLocation(shaderProgram::gcode_program, "view_projection");
+        assert(vp_id >= 0);
+        const int camera_position_id = ::glGetUniformLocation(shaderProgram::gcode_program, "camera_position");
+        assert(camera_position_id >= 0);
+        const int visibility_pass_id = ::glGetUniformLocation(shaderProgram::gcode_program, "visibility_pass");
+        assert(visibility_pass_id >= 0);
 
-    if (config::use_cheap_frag_shader) {
-        glUseProgram(shaderProgram::cheap_program);
-    } else {
-        glUseProgram(shaderProgram::gcode_program);
-    }
-    glBindVertexArray(gcode::gcodeVAO);
-    checkGl();
+        auto view_projection = glfwContext::camera.get_view_projection();
+        auto camera_position = glfwContext::camera.position;
+        glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
+        glUniform3fv(camera_position_id, 1, glm::value_ptr(camera_position));
+        glUniform1i(visibility_pass_id, false);
+        checkGl();
 
-    const int positions_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "positionsTex");
-    assert(positions_tex_id >= 0);
-    const int height_width_color_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthColorTex");
-    assert(height_width_color_tex_id >= 0);
-    const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "segmentIndexTex");
-    assert(segment_index_tex_id >= 0);
+        size_t segments_count = 100000;
+        if (segments_count > 0)
+            glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, segments_count);
+        checkGl();
 
-    glUniform1i(positions_tex_id, 0);
-    glUniform1i(height_width_color_tex_id, 1);
-    glUniform1i(segment_index_tex_id, 2);
-    checkGl();
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_BUFFER, path.positions_texture);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
-
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_BUFFER, path.height_width_color_texture);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_color_buffer);
-
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
-
-    const int vp_id = ::glGetUniformLocation(shaderProgram::gcode_program, "view_projection");
-    assert(vp_id >= 0);
-    const int camera_position_id = ::glGetUniformLocation(shaderProgram::gcode_program, "camera_position");
-    assert(camera_position_id >= 0);
-    const int visibility_pass_id = ::glGetUniformLocation(shaderProgram::gcode_program, "visibility_pass");
-    assert(visibility_pass_id >= 0);
-
-    auto view_projection = glfwContext::camera.get_view_projection();
-    auto camera_position = glfwContext::camera.position;
-    glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
-    glUniform3fv(camera_position_id, 1, glm::value_ptr(camera_position));
-    glUniform1i(visibility_pass_id, false);
-    checkGl();
-
-    size_t segments_count = 100000;
-    if (segments_count > 0)
-        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, segments_count);
-    checkGl();
-
-    glUseProgram(0);
-    glBindVertexArray(0);
-
+        glUseProgram(0);
+        glBindVertexArray(0);
     }
 }
 
