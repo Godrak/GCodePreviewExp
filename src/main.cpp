@@ -555,7 +555,7 @@ void render(gcode::BufferedPath &path)
         checkGl();
 
         glBindBuffer(GL_TEXTURE_BUFFER, path.visible_boxes_buffer);
-        glBufferData(GL_TEXTURE_BUFFER, (path.visible_boxes.first / 8) + 1, path.visible_boxes.second.data(), GL_STREAM_DRAW);
+        glBufferData(GL_TEXTURE_BUFFER, (path.visible_boxes_bitset.first / 8) + 1, path.visible_boxes_bitset.second.data(), GL_STREAM_DRAW);
 
         glUseProgram(shaderProgram::visibility_program);
         glBindVertexArray(path.visibility_VAO);
@@ -577,18 +577,20 @@ void render(gcode::BufferedPath &path)
 
         glReadPixels(0, 0, globals::screenResolution.x, globals::screenResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT, visibility_pixels_data.data());
 
-        std::for_each(visibility_pixels_data.begin(), visibility_pixels_data.end(), [&path](GLuint box_id) {
-            path.visible_boxes.second[box_id].set();
+        // RACE CONDITION
+        std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(),
+                      [&path](GLuint box_id) { path.visible_boxes_bitset.second[box_id].set(); });
+
+        path.visible_lines_bitset.second.reset();
+        path.visible_boxes_bitset.second.iterate_bits_on([&path](size_t box_id) {
+            for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
+                path.visible_lines_bitset.second[line_idx].set();
+            }
         });
     }
 
     path.visible_lines.clear();
-    for (uint32_t box_id = 0; box_id < path.visible_boxes.first; box_id++) {
-        if (path.visible_boxes.second[box_id]) {
-            path.visible_lines.insert(path.visible_lines.end(), path.visibility_boxes_with_segments[box_id].second.begin(),
-                                      path.visibility_boxes_with_segments[box_id].second.end());
-        }
-    }
+    path.visible_lines_bitset.second.iterate_bits_on([&path](size_t line_id) { path.visible_lines.push_back(line_id); });
 
     glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_buffer);
     glBufferData(GL_TEXTURE_BUFFER, path.visible_lines.size() * sizeof(size_t), path.visible_lines.data(), GL_STREAM_DRAW);
