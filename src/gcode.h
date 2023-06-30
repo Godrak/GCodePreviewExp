@@ -249,7 +249,7 @@ struct BufferedPath
     std::pair<size_t, sul::dynamic_bitset<>> visible_lines;
 
     GLuint visibility_VAO;
-    GLuint visibility_boxes_vertex_buffer, visibility_boxes_index_buffer, visibility_boxes_texture, visibility_boxes_buffer;
+    GLuint visibility_boxes_vertex_buffer, visibility_boxes_index_buffer, visible_boxes_texture, visible_boxes_buffer;
     size_t index_buffer_size;
     std::vector<std::pair<glm::ivec3, std::vector<size_t>>> visibility_boxes_with_segments;
     std::pair<size_t, sul::dynamic_bitset<>> visible_boxes;
@@ -449,8 +449,11 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
     // VISIBILITY BOXES DATA
     {
+        result.visibility_boxes_with_segments.push_back({max_coords, {}});
         for (const auto &pair : visibility_boxes) {
-            result.visibility_boxes_with_segments.push_back({pair.first, {pair.second.begin(), pair.second.end()}});
+            if (pair.first != max_coords) {
+                result.visibility_boxes_with_segments.push_back({pair.first, {pair.second.begin(), pair.second.end()}});
+            }
         };
 
         std::vector<glm::vec4> boxes_positions_w_ids;
@@ -467,6 +470,10 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
                 boxes_indices.push_back(indices_offset + index);
             }
         }
+
+        result.visible_boxes = {result.visibility_boxes_with_segments.size(),
+                                sul::dynamic_bitset<>(result.visibility_boxes_with_segments.size())};
+
         glGenVertexArrays(1, &result.visibility_VAO);
         glBindVertexArray(result.visibility_VAO);
 
@@ -483,15 +490,15 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
         result.index_buffer_size = boxes_indices.size();
 
         // Create a buffer object and bind it to the texture buffer
-        glGenBuffers(1, &result.visibility_boxes_buffer);
-        glBindBuffer(GL_TEXTURE_BUFFER, result.visibility_boxes_buffer);
+        glGenBuffers(1, &result.visible_boxes_buffer);
+        glBindBuffer(GL_TEXTURE_BUFFER, result.visible_boxes_buffer);
 
         // Create and bind the path texture
-        glGenTextures(1, &result.visibility_boxes_texture);
-        glBindTexture(GL_TEXTURE_BUFFER, result.visibility_boxes_texture);
+        glGenTextures(1, &result.visible_boxes_texture);
+        glBindTexture(GL_TEXTURE_BUFFER, result.visible_boxes_texture);
 
         // Attach the buffer object to the texture buffer
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, result.visibility_boxes_buffer);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, result.visible_boxes_buffer);
     }
 
     ///GCODE DATA

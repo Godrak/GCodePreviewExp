@@ -547,15 +547,23 @@ void render(gcode::BufferedPath &path)
         glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
         checkGl();
 
-        glBindBuffer(GL_TEXTURE_BUFFER, path.visibility_boxes_buffer);
-        glBufferData(GL_TEXTURE_BUFFER, path.visible_boxes.first / (sizeof(GLuint) * 8), path.visible_boxes.second.data(), GL_STREAM_DRAW);
+        for (size_t i = 0; i < path.visible_boxes.first; i++) {
+            path.visible_boxes.second[i] = i % 2 == 0;
+        }
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_BUFFER, path.visibility_boxes_texture);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visibility_boxes_buffer);
+        glBindBuffer(GL_TEXTURE_BUFFER, path.visible_boxes_buffer);
+        glBufferData(GL_TEXTURE_BUFFER, (path.visible_boxes.first / 8) + 1, path.visible_boxes.second.data(), GL_STREAM_DRAW);
 
         glUseProgram(shaderProgram::visibility_program);
         glBindVertexArray(path.visibility_VAO);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_BUFFER, path.visible_boxes_texture);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_boxes_buffer);
+
+        const int visible_boxes_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "visible_boxes_bits");
+        assert(visible_boxes_tex_id >= 0);
+        glUniform1i(visible_boxes_tex_id, 0);
 
         const int vp_id = ::glGetUniformLocation(shaderProgram::visibility_program, "view_projection");
         assert(vp_id >= 0);
