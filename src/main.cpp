@@ -540,16 +540,19 @@ void render(gcode::BufferedPath &path)
     }
 
     if (config::with_visibility_pass) {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, gcode::visibilityFramebuffer);
+        glBlitFramebuffer(0, 0, globals::screenResolution.x, globals::screenResolution.y, 0, 0, globals::screenResolution.x,
+                          globals::screenResolution.y, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+
         glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
         checkGl();
         glEnable(GL_DEPTH_TEST);
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT);
         checkGl();
         glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
         checkGl();
-
-        path.visible_boxes.second.reset();
 
         glBindBuffer(GL_TEXTURE_BUFFER, path.visible_boxes_buffer);
         glBufferData(GL_TEXTURE_BUFFER, (path.visible_boxes.first / 8) + 1, path.visible_boxes.second.data(), GL_STREAM_DRAW);
@@ -579,6 +582,9 @@ void render(gcode::BufferedPath &path)
         });
     }
 
+path.visible_boxes.second.set();
+    
+    
     path.visible_lines.clear();
     for (size_t box_id = 0; box_id < path.visible_boxes.first; box_id++) {
         if (path.visible_boxes.second[box_id]) {
