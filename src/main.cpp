@@ -533,7 +533,29 @@ void render(gcode::BufferedPath &path)
         config::camera_center_required = false;
     }
 
+    if (config::with_visibility_pass) {
 
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        checkGl();
+        glEnable(GL_DEPTH_TEST);
+        glClearColor(0.6f, 0.6f, 0.6f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        checkGl();
+        glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
+        checkGl();
+
+        glUseProgram(shaderProgram::visibility_program);
+        glBindVertexArray(path.visibility_VAO);
+
+        const int vp_id = ::glGetUniformLocation(shaderProgram::visibility_program, "view_projection");
+        assert(vp_id >= 0);
+        auto view_projection = glfwContext::camera.get_view_projection();
+        glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
+
+        glDrawElements(GL_TRIANGLES, path.index_buffer_size, GL_UNSIGNED_INT, 0);
+
+    } else {
 
 
     //  Temporary testing data buffering
@@ -612,6 +634,8 @@ void render(gcode::BufferedPath &path)
 
     glUseProgram(0);
     glBindVertexArray(0);
+
+    }
 }
 
 void setup()

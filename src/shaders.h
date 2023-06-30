@@ -78,9 +78,9 @@ void createGCodeProgram() {
 }
 
 void createVisibilityProgram() {
-	loadAndCompileShader(shaders_path + "gcode_shaders/v_shader.glsl", visibility_v_shader,
+	loadAndCompileShader(shaders_path + "gcode_shaders/visibility_v_shader.glsl", visibility_v_shader,
 	GL_VERTEX_SHADER);
-	loadAndCompileShader(shaders_path + "gcode_shaders/vis_f_shader.glsl", visibility_f_shader,
+	loadAndCompileShader(shaders_path + "gcode_shaders/visibility_f_shader.glsl", visibility_f_shader,
 		GL_FRAGMENT_SHADER);
 
 	visibility_program = glCreateProgram();

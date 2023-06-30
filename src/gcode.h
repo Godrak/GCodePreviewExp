@@ -9,16 +9,14 @@
 #ifndef GCODE_H_
 #define GCODE_H_
 
-#include <limits>
+#include <glm/fwd.hpp>
 #include <sul/dynamic_bitset.hpp>
 
 #include "glad/glad.h"
 #include "globals.h"
 #include "camera.h"
 
-
 #include <cstddef>
-#include <glm/fwd.hpp>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -26,6 +24,7 @@
 #include <iostream>
 #include <algorithm>
 #include <array>
+#include <limits>
 
 namespace gcode {
 
@@ -250,6 +249,7 @@ struct BufferedPath
 
     GLuint visibility_VAO;
     GLuint visibility_boxes_vertex_buffer, visibility_boxes_index_buffer;
+    size_t index_buffer_size;
     std::vector<std::pair<glm::ivec3, std::vector<size_t>>> visibility_boxes_with_segments;
 
     std::pair<size_t, sul::dynamic_bitset<>> visible_boxes;
@@ -387,7 +387,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
                 visibility_boxes[coords].insert(i);
             }
         } else {
-            // the connection is invalid, there should be no line rendered
+            // the connection is invalid, there should be no line rendered, ever
             result.enabled_lines.second[i] = false;
         }
 
@@ -433,6 +433,8 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
         glGenBuffers(1, &result.visibility_boxes_index_buffer);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, result.visibility_boxes_index_buffer);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, boxes_indices.size() * sizeof(GLuint), boxes_indices.data(), GL_STATIC_DRAW);
+
+        result.index_buffer_size = boxes_indices.size();
     }
 
     ///GCODE DATA
