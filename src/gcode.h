@@ -246,7 +246,7 @@ struct BufferedPath
     GLuint enabled_segments_texture, enabled_segments_buffer;
     size_t total_points_count;
     std::pair<size_t, sul::dynamic_bitset<>> enabled_lines;
-    std::pair<size_t, sul::dynamic_bitset<>> visible_lines;
+    std::vector<size_t> visible_lines;
 
     GLuint visibility_VAO;
     GLuint visibility_boxes_vertex_buffer, visibility_boxes_index_buffer, visible_boxes_texture, visible_boxes_buffer;

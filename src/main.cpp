@@ -507,6 +507,7 @@ static size_t hope_unique(uint32_t *out, size_t len) {
 }
 
 FilteringWorker filtering_worker{};
+std::vector<GLuint> visibility_pixels_data;
 
 void switchConfiguration()
 {
@@ -535,21 +536,20 @@ void render(gcode::BufferedPath &path)
         globals::screenResolution = new_size;
         glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
         gcode::recreateVisibilityBufferOnResolutionChange();
+        visibility_pixels_data.resize(globals::screenResolution.x * globals::screenResolution.y);
     }
 
     if (config::with_visibility_pass) {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
         checkGl();
         glEnable(GL_DEPTH_TEST);
-        glClearColor(0.6f, 0.6f, 0.6f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         checkGl();
         glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
         checkGl();
 
-        for (size_t i = 0; i < path.visible_boxes.first; i++) {
-            path.visible_boxes.second[i] = i % 2 == 0;
-        }
+        path.visible_boxes.second.reset();
 
         glBindBuffer(GL_TEXTURE_BUFFER, path.visible_boxes_buffer);
         glBufferData(GL_TEXTURE_BUFFER, (path.visible_boxes.first / 8) + 1, path.visible_boxes.second.data(), GL_STREAM_DRAW);
@@ -572,79 +572,87 @@ void render(gcode::BufferedPath &path)
 
         glDrawElements(GL_TRIANGLES, path.index_buffer_size, GL_UNSIGNED_INT, 0);
 
-    } else {
-        //  Temporary testing data buffering
-        std::vector<size_t> visible_indices;
-        for (size_t i = 0; i < 100000; i++) {
-            visible_indices.push_back(i);
-        }
-        glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_segments_buffer);
-        glBufferData(GL_TEXTURE_BUFFER, visible_indices.size() * sizeof(size_t), visible_indices.data(), GL_STREAM_DRAW);
+        glReadPixels(0, 0, globals::screenResolution.x, globals::screenResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT, visibility_pixels_data.data());
 
-        // Now render only the visible lines, with the expensive frag shader
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        checkGl();
-        glEnable(GL_DEPTH_TEST);
-        glClearColor(0.6f, 0.6f, 0.6f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        checkGl();
-        glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
-        checkGl();
-
-        if (config::use_cheap_frag_shader) {
-            glUseProgram(shaderProgram::cheap_program);
-        } else {
-            glUseProgram(shaderProgram::gcode_program);
-        }
-        glBindVertexArray(gcode::gcodeVAO);
-        checkGl();
-
-        const int positions_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "positionsTex");
-        assert(positions_tex_id >= 0);
-        const int height_width_color_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthColorTex");
-        assert(height_width_color_tex_id >= 0);
-        const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "segmentIndexTex");
-        assert(segment_index_tex_id >= 0);
-
-        glUniform1i(positions_tex_id, 0);
-        glUniform1i(height_width_color_tex_id, 1);
-        glUniform1i(segment_index_tex_id, 2);
-        checkGl();
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_BUFFER, path.positions_texture);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
-
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_BUFFER, path.height_width_color_texture);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_color_buffer);
-
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
-
-        const int vp_id = ::glGetUniformLocation(shaderProgram::gcode_program, "view_projection");
-        assert(vp_id >= 0);
-        const int camera_position_id = ::glGetUniformLocation(shaderProgram::gcode_program, "camera_position");
-        assert(camera_position_id >= 0);
-        const int visibility_pass_id = ::glGetUniformLocation(shaderProgram::gcode_program, "visibility_pass");
-        assert(visibility_pass_id >= 0);
-
-        auto view_projection = glfwContext::camera.get_view_projection();
-        auto camera_position = glfwContext::camera.position;
-        glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
-        glUniform3fv(camera_position_id, 1, glm::value_ptr(camera_position));
-        glUniform1i(visibility_pass_id, false);
-        checkGl();
-
-        size_t segments_count = 100000;
-        if (segments_count > 0)
-            glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, segments_count);
-        checkGl();
-
-        glUseProgram(0);
-        glBindVertexArray(0);
+        std::for_each(visibility_pixels_data.begin(), visibility_pixels_data.end(), [&path](GLuint box_id) {
+            path.visible_boxes.second[box_id].set();
+        });
     }
+
+    path.visible_lines.clear();
+    for (size_t box_id = 0; box_id < path.visible_boxes.first; box_id++) {
+        if (path.visible_boxes.second[box_id]) {
+            path.visible_lines.insert(path.visible_lines.end(), path.visibility_boxes_with_segments[box_id].second.begin(),
+                                      path.visibility_boxes_with_segments[box_id].second.end());
+        }
+    }
+
+    glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_segments_buffer);
+    glBufferData(GL_TEXTURE_BUFFER, path.visible_lines.size() * sizeof(size_t), path.visible_lines.data(), GL_STREAM_DRAW);
+
+    // Now render only the visible lines, with the expensive frag shader
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    checkGl();
+    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.6f, 0.6f, 0.6f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    checkGl();
+    glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
+    checkGl();
+
+    if (config::use_cheap_frag_shader) {
+        glUseProgram(shaderProgram::cheap_program);
+    } else {
+        glUseProgram(shaderProgram::gcode_program);
+    }
+    glBindVertexArray(gcode::gcodeVAO);
+    checkGl();
+
+    const int positions_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "positionsTex");
+    assert(positions_tex_id >= 0);
+    const int height_width_color_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthColorTex");
+    assert(height_width_color_tex_id >= 0);
+    const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "segmentIndexTex");
+    assert(segment_index_tex_id >= 0);
+
+    glUniform1i(positions_tex_id, 0);
+    glUniform1i(height_width_color_tex_id, 1);
+    glUniform1i(segment_index_tex_id, 2);
+    checkGl();
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_BUFFER, path.positions_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_BUFFER, path.height_width_color_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_color_buffer);
+
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
+
+    const int vp_id = ::glGetUniformLocation(shaderProgram::gcode_program, "view_projection");
+    assert(vp_id >= 0);
+    const int camera_position_id = ::glGetUniformLocation(shaderProgram::gcode_program, "camera_position");
+    assert(camera_position_id >= 0);
+    const int visibility_pass_id = ::glGetUniformLocation(shaderProgram::gcode_program, "visibility_pass");
+    assert(visibility_pass_id >= 0);
+
+    auto view_projection = glfwContext::camera.get_view_projection();
+    auto camera_position = glfwContext::camera.position;
+    glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
+    glUniform3fv(camera_position_id, 1, glm::value_ptr(camera_position));
+    glUniform1i(visibility_pass_id, false);
+    checkGl();
+
+    size_t segments_count = 100000;
+    if (segments_count > 0)
+        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, segments_count);
+    checkGl();
+
+    glUseProgram(0);
+    glBindVertexArray(0);
 }
 
 void setup()
