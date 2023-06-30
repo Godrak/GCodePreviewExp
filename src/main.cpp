@@ -582,18 +582,15 @@ void render(gcode::BufferedPath &path)
         });
     }
 
-path.visible_boxes.second.set();
-    
-    
     path.visible_lines.clear();
-    for (size_t box_id = 0; box_id < path.visible_boxes.first; box_id++) {
+    for (uint32_t box_id = 0; box_id < path.visible_boxes.first; box_id++) {
         if (path.visible_boxes.second[box_id]) {
             path.visible_lines.insert(path.visible_lines.end(), path.visibility_boxes_with_segments[box_id].second.begin(),
                                       path.visibility_boxes_with_segments[box_id].second.end());
         }
     }
 
-    glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_segments_buffer);
+    glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_buffer);
     glBufferData(GL_TEXTURE_BUFFER, path.visible_lines.size() * sizeof(size_t), path.visible_lines.data(), GL_STREAM_DRAW);
 
     // Now render only the visible lines, with the expensive frag shader
@@ -635,8 +632,8 @@ path.visible_boxes.second.set();
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_color_buffer);
 
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_BUFFER, path.enabled_segments_texture);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_segments_buffer);
+    glBindTexture(GL_TEXTURE_BUFFER, path.visible_segments_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_segments_buffer);
 
     const int vp_id = ::glGetUniformLocation(shaderProgram::gcode_program, "view_projection");
     assert(vp_id >= 0);
@@ -652,9 +649,8 @@ path.visible_boxes.second.set();
     glUniform1i(visibility_pass_id, false);
     checkGl();
 
-    size_t segments_count = 100000;
-    if (segments_count > 0)
-        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, segments_count);
+    if (path.visible_lines.size() > 0)
+        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, path.visible_lines.size());
     checkGl();
 
     glUseProgram(0);

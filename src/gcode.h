@@ -243,15 +243,15 @@ struct BufferedPath
 {
     GLuint positions_texture, positions_buffer;
     GLuint height_width_color_texture, height_width_color_buffer;
-    GLuint enabled_segments_texture, enabled_segments_buffer;
+    GLuint visible_segments_texture, visible_segments_buffer;
     size_t total_points_count;
     std::pair<size_t, sul::dynamic_bitset<>> enabled_lines;
-    std::vector<size_t> visible_lines;
+    std::vector<uint32_t> visible_lines;
 
     GLuint visibility_VAO;
     GLuint visibility_boxes_vertex_buffer, visibility_boxes_index_buffer, visible_boxes_texture, visible_boxes_buffer;
     size_t index_buffer_size;
-    std::vector<std::pair<glm::ivec3, std::vector<size_t>>> visibility_boxes_with_segments;
+    std::vector<std::pair<glm::ivec3, std::vector<uint32_t>>> visibility_boxes_with_segments;
     std::pair<size_t, sul::dynamic_bitset<>> visible_boxes;
 };
 
@@ -449,6 +449,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
     // VISIBILITY BOXES DATA
     {
+          // fill first position with empty box. This is to ensure that we can use 0 as clear value for visilibty framebuffer
         result.visibility_boxes_with_segments.push_back({max_coords, {}});
         for (const auto &pair : visibility_boxes) {
             if (pair.first != max_coords) {
@@ -540,15 +541,15 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
    // Create a buffer object and bind it to the texture buffer
-    glGenBuffers(1, &result.enabled_segments_buffer);
-    glBindBuffer(GL_TEXTURE_BUFFER, result.enabled_segments_buffer);
+    glGenBuffers(1, &result.visible_segments_buffer);
+    glBindBuffer(GL_TEXTURE_BUFFER, result.visible_segments_buffer);
 
     // Create and bind the path texture
-    glGenTextures(1, &result.enabled_segments_texture);
-    glBindTexture(GL_TEXTURE_BUFFER, result.enabled_segments_texture);
+    glGenTextures(1, &result.visible_segments_texture);
+    glBindTexture(GL_TEXTURE_BUFFER, result.visible_segments_texture);
 
     // Attach the buffer object to the texture buffer
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, result.enabled_segments_buffer);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, result.visible_segments_buffer);
 
     // Unbind the buffer object and the texture buffer
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
