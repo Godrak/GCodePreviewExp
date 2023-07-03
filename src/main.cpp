@@ -539,7 +539,8 @@ void render(gcode::BufferedPath &path)
     if (config::with_visibility_pass &&
         (!path.filtering_work.valid() || path.filtering_work.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready)) {
         
-        std::cout << path.visible_lines.size() << std::endl;
+        std::cout << "VISIBLITY RENDERING PASS STARTS: " << glfwGetTime() << std::endl;
+
         glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_buffer);
         glBufferData(GL_TEXTURE_BUFFER, path.visible_lines.size() * sizeof(uint32_t), path.visible_lines.data(), GL_STREAM_DRAW);
         path.visible_segments_count = path.visible_lines.size();
@@ -583,9 +584,10 @@ void render(gcode::BufferedPath &path)
                      visibility_pixels_data.data());
 
         path.filtering_work = filtering_worker.enqueue([&path]() {
-            // RACE CONDITION
+            // race condition here, but can be probably ignored?
             std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(),
                           [&path](GLuint box_id) { path.visible_boxes_bitset.set(box_id); });
+
 
             path.visible_lines_bitset.clear();
             for (size_t box_id = 0; box_id < path.visible_boxes_bitset.size; box_id++) {
@@ -598,8 +600,8 @@ void render(gcode::BufferedPath &path)
 
             path.visible_lines.clear();
             for (size_t line_id = 0; line_id < path.visible_lines_bitset.size; line_id++) {
-                if (path.visible_lines_bitset[line_id]) {
-                    path.visible_lines.push_back(line_id);
+                if (path.visible_lines_bitset[line_id]){
+            path.visible_lines.push_back(line_id); 
                 }
             }
         });

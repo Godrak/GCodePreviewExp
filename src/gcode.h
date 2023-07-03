@@ -1,6 +1,7 @@
 #ifndef GCODE_H_
 #define GCODE_H_
 
+#include <atomic>
 #include <future>
 #include <glm/fwd.hpp>
 
@@ -240,7 +241,7 @@ struct BufferedPath
     size_t                visible_segments_count;
     size_t                total_points_count;
     bitset::BitSet<>      enabled_lines_bitset;
-    bitset::BitSet<>      visible_lines_bitset;
+    bitset::BitSet<std::atomic_size_t>      visible_lines_bitset;
     std::vector<uint32_t> visible_lines;
 
     std::future<void> filtering_work{};
@@ -414,7 +415,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
     result.enabled_lines_bitset = bitset::BitSet<>(path_points.size());
     result.enabled_lines_bitset.setAll();
-    result.visible_lines_bitset = bitset::BitSet<>(path_points.size());
+    result.visible_lines_bitset = bitset::BitSet<std::atomic_size_t>(path_points.size());
     result.visible_lines_bitset.clear();
 
     std::unordered_map<glm::ivec3, std::unordered_set<size_t>> visibility_boxes;
