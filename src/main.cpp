@@ -4,6 +4,8 @@
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
 #include <iostream>
+#include <limits>
+#include <random>
 #if defined(_WIN32)
 #include <windows.h>
 #endif // _WIN32
@@ -503,8 +505,10 @@ static size_t hope_unique(uint32_t *out, size_t len) {
     return pos;
 }
 
-FilteringWorker filtering_worker{};
-std::vector<GLuint> visibility_pixels_data;
+FilteringWorker                                   filtering_worker{};
+std::vector<GLuint>                               visibility_pixels_data;
+std::random_device                                random_device;
+std::mt19937                                      random_generator(random_device());
 
 void switchConfiguration()
 {
@@ -600,8 +604,19 @@ void render(gcode::BufferedPath &path)
 
             path.visible_lines.clear();
             path.visible_lines_bitset.getEnabledIndices(path.visible_lines);
-            
+
             std::cout << "filtetring done " << glfwGetTime() << std::endl;
+
+            for (size_t i = 0; i < 3; i++) {
+                auto box_id = path.visible_boxes_indices_distr(random_generator);
+                if (path.visible_boxes_bitset.reset(box_id)) {
+                     for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
+                        path.visible_lines_bitset.reset(line_idx);
+                    }
+                }
+            }
+
+            std::cout << "random disable done " << glfwGetTime() << std::endl;
         });
     }
 

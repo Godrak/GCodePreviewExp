@@ -250,6 +250,7 @@ struct BufferedPath
     size_t            index_buffer_size;
     std::vector<std::pair<glm::ivec3, std::vector<uint32_t>>> visibility_boxes_with_segments;
     bitset::BitSet<>                                          visible_boxes_bitset;
+    std::uniform_int_distribution<size_t>                     visible_boxes_indices_distr;
 };
 
 void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &path_points)
@@ -471,7 +472,8 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
             }
         }
 
-        result.visible_boxes_bitset = bitset::BitSet<>(result.visibility_boxes_with_segments.size());
+        result.visible_boxes_bitset        = bitset::BitSet<>(result.visibility_boxes_with_segments.size());
+        result.visible_boxes_indices_distr = std::uniform_int_distribution<size_t>{0, result.visibility_boxes_with_segments.size() - 1};
 
         glGenVertexArrays(1, &result.visibility_VAO);
         glBindVertexArray(result.visibility_VAO);

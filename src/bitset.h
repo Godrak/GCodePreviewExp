@@ -16,7 +16,7 @@ template<typename T = unsigned long long>
 class BitSet
 {
 public:
-    BitSet(unsigned int size) : size(size), blocks((size + sizeof(T) - 1) / sizeof(T)) { clear(); }
+    BitSet(unsigned int size) : size(size), blocks(1 + (size / (sizeof(T) * 8))) { clear(); }
 
     BitSet() : size(0), blocks(0) {}
 
@@ -34,16 +34,24 @@ public:
         }
     }
 
-    void set(unsigned int index)
+    //return true if bit changed
+    bool set(unsigned int index)
     {
         const auto [block_idx, bit_idx] = get_coords(index);
-        blocks[block_idx] |= (T(1) << bit_idx);
+        T mask = (T(1) << bit_idx);
+        bool flip = mask xor blocks[block_idx];
+        blocks[block_idx] |= mask;
+        return flip;
     }
 
-    void reset(unsigned int index)
+    //return true if bit changed
+    bool reset(unsigned int index)
     {
         const auto [block_idx, bit_idx] = get_coords(index);
-        blocks[block_idx] &= ~(T(1) << bit_idx);
+        T mask = (T(1) << bit_idx);
+        bool flip = mask xor blocks[block_idx];
+        blocks[block_idx] &= (~mask);
+         return flip;
     }
 
     bool operator[](unsigned int index) const
@@ -92,7 +100,7 @@ public:
         return oldval xor (oldval or mask);
     }
 
-    // Atomic reset operation (enabled only for atomic types), returns old value
+    // Atomic reset operation (enabled only for atomic types), return true if bit changed
     template<typename U = T> inline typename std::enable_if<is_atomic<U>, bool>::type reset_atomic(unsigned int index)
     {
         const auto [block_idx, bit_idx] = get_coords(index);
