@@ -249,7 +249,7 @@ struct BufferedPath
     GLuint            visibility_boxes_vertex_buffer, visibility_boxes_index_buffer, visible_boxes_texture, visible_boxes_buffer;
     size_t            index_buffer_size;
     std::vector<std::pair<glm::ivec3, std::vector<uint32_t>>> visibility_boxes_with_segments;
-    bitset::BitSet<>                                          visible_boxes_bitset;
+    std::vector<GLint>                                        visible_boxes_heat;
     std::uniform_int_distribution<size_t>                     visible_boxes_indices_distr;
 };
 
@@ -472,7 +472,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
             }
         }
 
-        result.visible_boxes_bitset        = bitset::BitSet<>(result.visibility_boxes_with_segments.size());
+        result.visible_boxes_heat          = std::vector<GLint>(result.visibility_boxes_with_segments.size());
         result.visible_boxes_indices_distr = std::uniform_int_distribution<size_t>{0, result.visibility_boxes_with_segments.size() - 1};
 
         glGenVertexArrays(1, &result.visibility_VAO);

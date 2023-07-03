@@ -3,7 +3,10 @@
 // If you are new to Dear ImGui, read documentation from the docs/ folder + read the top of imgui.cpp.
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
+#include "glm/fwd.hpp"
+#include <cstdlib>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <random>
 #if defined(_WIN32)
@@ -564,16 +567,17 @@ void render(gcode::BufferedPath &path)
         checkGl();
 
         glBindBuffer(GL_TEXTURE_BUFFER, path.visible_boxes_buffer);
-        glBufferData(GL_TEXTURE_BUFFER, (path.visible_boxes_bitset.size / 8) + 1, path.visible_boxes_bitset.blocks.data(), GL_STREAM_DRAW);
+        glBufferData(GL_TEXTURE_BUFFER, path.visible_boxes_heat.size() * sizeof(GLint), path.visible_boxes_heat.data(),
+                     GL_STREAM_DRAW);
 
         glUseProgram(shaderProgram::visibility_program);
         glBindVertexArray(path.visibility_VAO);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_BUFFER, path.visible_boxes_texture);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_boxes_buffer);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32I, path.visible_boxes_buffer);
 
-        const int visible_boxes_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "visible_boxes_bits");
+        const int visible_boxes_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "visible_boxes_heat");
         assert(visible_boxes_tex_id >= 0);
         glUniform1i(visible_boxes_tex_id, 0);
 
@@ -591,32 +595,29 @@ void render(gcode::BufferedPath &path)
             std::cout << "Filtering starts " << glfwGetTime() << std::endl;
 
             std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(), [&path](GLuint box_id) {
-                bool old = path.visible_boxes_bitset[box_id];
-                path.visible_boxes_bitset.set(box_id);
-                if (!old) {
+                path.visible_boxes_heat[box_id] = 10 + 10 * float(rand()) / RAND_MAX;
+            });
+
+            std::cout << "heat assigned " << glfwGetTime() << std::endl;
+
+            path.visible_lines_bitset.clear();
+
+            std::for_each(std::execution::par_unseq, path.visible_boxes_heat.begin(), path.visible_boxes_heat.end(), [&path](GLint &heat) {
+                if (heat > 0) {
+                    size_t box_id = std::distance(&path.visible_boxes_heat[0], &heat);
                     for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
                         path.visible_lines_bitset.set_atomic(line_idx);
                     }
                 }
+                heat--;
             });
 
-            std::cout << "half time " << glfwGetTime() << std::endl;
+            std::cout << "enabled hot lines " << glfwGetTime() << std::endl;
 
             path.visible_lines.clear();
             path.visible_lines_bitset.getEnabledIndices(path.visible_lines);
 
-            std::cout << "filtetring done " << glfwGetTime() << std::endl;
-
-            for (size_t i = 0; i < 3; i++) {
-                auto box_id = path.visible_boxes_indices_distr(random_generator);
-                if (path.visible_boxes_bitset.reset(box_id)) {
-                     for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
-                        path.visible_lines_bitset.reset(line_idx);
-                    }
-                }
-            }
-
-            std::cout << "random disable done " << glfwGetTime() << std::endl;
+            std::cout << "filtering done " << glfwGetTime() << std::endl;
         });
     }
 
