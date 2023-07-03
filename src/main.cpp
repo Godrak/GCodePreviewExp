@@ -3,6 +3,7 @@
 // If you are new to Dear ImGui, read documentation from the docs/ folder + read the top of imgui.cpp.
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
+#include <iostream>
 #if defined(_WIN32)
 #include <windows.h>
 #endif // _WIN32
@@ -439,14 +440,10 @@ class FilteringWorker
 public:
     FilteringWorker() : stopFlag(false) { workerThread = std::thread(&FilteringWorker::workerThreadFunction, this); }
 
-    template<typename Callable, typename... Args>
-    auto enqueue(Callable &&callable, Args &&...args) -> std::future<typename std::result_of<Callable(Args...)>::type>
+    template<typename Callable> auto enqueue(Callable &&callable) -> std::future<void>
     {
-        using ReturnType = typename std::result_of<Callable(Args...)>::type;
-
-        auto task = std::make_shared<std::packaged_task<ReturnType()>>(
-            std::bind(std::forward<Callable>(callable), std::forward<Args>(args)...));
-        std::future<ReturnType> futureObj = task->get_future();
+        auto              task      = std::make_shared<std::packaged_task<void()>>(std::forward<Callable>(callable));
+        std::future<void> futureObj = task->get_future();
 
         {
             std::lock_guard<std::mutex> lock(queueMutex);
@@ -539,7 +536,14 @@ void render(gcode::BufferedPath &path)
         visibility_pixels_data.resize(globals::screenResolution.x * globals::screenResolution.y);
     }
 
-    if (config::with_visibility_pass) {
+    if (config::with_visibility_pass &&
+        (!path.filtering_work.valid() || path.filtering_work.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready)) {
+        
+        std::cout << path.visible_lines.size() << std::endl;
+        glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_buffer);
+        glBufferData(GL_TEXTURE_BUFFER, path.visible_lines.size() * sizeof(uint32_t), path.visible_lines.data(), GL_STREAM_DRAW);
+        path.visible_segments_count = path.visible_lines.size();
+
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, gcode::visibilityFramebuffer);
         glBlitFramebuffer(0, 0, globals::screenResolution.x, globals::screenResolution.y, 0, 0, globals::screenResolution.x,
@@ -555,7 +559,7 @@ void render(gcode::BufferedPath &path)
         checkGl();
 
         glBindBuffer(GL_TEXTURE_BUFFER, path.visible_boxes_buffer);
-        glBufferData(GL_TEXTURE_BUFFER, (path.visible_boxes_bitset.first / 8) + 1, path.visible_boxes_bitset.second.data(), GL_STREAM_DRAW);
+        glBufferData(GL_TEXTURE_BUFFER, (path.visible_boxes_bitset.size / 8) + 1, path.visible_boxes_bitset.blocks.data(), GL_STREAM_DRAW);
 
         glUseProgram(shaderProgram::visibility_program);
         glBindVertexArray(path.visibility_VAO);
@@ -575,25 +579,31 @@ void render(gcode::BufferedPath &path)
 
         glDrawElements(GL_TRIANGLES, path.index_buffer_size, GL_UNSIGNED_INT, 0);
 
-        glReadPixels(0, 0, globals::screenResolution.x, globals::screenResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT, visibility_pixels_data.data());
+        glReadPixels(0, 0, globals::screenResolution.x, globals::screenResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT,
+                     visibility_pixels_data.data());
 
-        // RACE CONDITION
-        std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(),
-                      [&path](GLuint box_id) { path.visible_boxes_bitset.second[box_id].set(); });
+        path.filtering_work = filtering_worker.enqueue([&path]() {
+            // RACE CONDITION
+            std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(),
+                          [&path](GLuint box_id) { path.visible_boxes_bitset.set(box_id); });
 
-        path.visible_lines_bitset.second.reset();
-        path.visible_boxes_bitset.second.iterate_bits_on([&path](size_t box_id) {
-            for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
-                path.visible_lines_bitset.second[line_idx].set();
+            path.visible_lines_bitset.clear();
+            for (size_t box_id = 0; box_id < path.visible_boxes_bitset.size; box_id++) {
+                if (path.visible_boxes_bitset[box_id]) {
+                    for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
+                        path.visible_lines_bitset.set(line_idx);
+                    }
+                }
+            }
+
+            path.visible_lines.clear();
+            for (size_t line_id = 0; line_id < path.visible_lines_bitset.size; line_id++) {
+                if (path.visible_lines_bitset[line_id]) {
+                    path.visible_lines.push_back(line_id);
+                }
             }
         });
     }
-
-    path.visible_lines.clear();
-    path.visible_lines_bitset.second.iterate_bits_on([&path](size_t line_id) { path.visible_lines.push_back(line_id); });
-
-    glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_buffer);
-    glBufferData(GL_TEXTURE_BUFFER, path.visible_lines.size() * sizeof(size_t), path.visible_lines.data(), GL_STREAM_DRAW);
 
     // Now render only the visible lines, with the expensive frag shader
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -651,8 +661,8 @@ void render(gcode::BufferedPath &path)
     glUniform1i(visibility_pass_id, false);
     checkGl();
 
-    if (path.visible_lines.size() > 0)
-        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, path.visible_lines.size());
+    if (path.visible_segments_count > 0)
+        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, path.visible_segments_count);
     checkGl();
 
     glUseProgram(0);

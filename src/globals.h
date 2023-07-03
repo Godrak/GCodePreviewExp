@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include "bitset"
 
 namespace globals {
 glm::ivec2 screenResolution = {512,512};
@@ -31,7 +32,7 @@ bool use_cheap_frag_shader = false;
 size_t camera_prediction_frames = 4;
 size_t visiblity_multiframes_count = 10;
 
-float voxel_size = 10;
+float voxel_size = 5;
 }
 
 class SequentialRange

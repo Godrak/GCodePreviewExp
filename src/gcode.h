@@ -1,17 +1,10 @@
-/*
- * gcode.h
- *
- *  Created on: Jun 9, 2019
- *      Author: Pavel Mikus
- *		mail: pavel.mikus@eyen.se
- */
-
 #ifndef GCODE_H_
 #define GCODE_H_
 
+#include <future>
 #include <glm/fwd.hpp>
-#include <sul/dynamic_bitset.hpp>
 
+#include "bitset.h"
 #include "glad/glad.h"
 #include "globals.h"
 #include "camera.h"
@@ -241,19 +234,21 @@ void set_ranges(const std::vector<PathPoint>& path_points)
 
 struct BufferedPath
 {
-    GLuint positions_texture, positions_buffer;
-    GLuint height_width_color_texture, height_width_color_buffer;
-    GLuint visible_segments_texture, visible_segments_buffer;
-    size_t total_points_count;
-    std::pair<size_t, sul::dynamic_bitset<>> enabled_lines_bitset;
-    std::pair<size_t, sul::dynamic_bitset<>> visible_lines_bitset;
+    GLuint                positions_texture, positions_buffer;
+    GLuint                height_width_color_texture, height_width_color_buffer;
+    GLuint                visible_segments_texture, visible_segments_buffer;
+    size_t                visible_segments_count;
+    size_t                total_points_count;
+    bitset::BitSet<>      enabled_lines_bitset;
+    bitset::BitSet<>      visible_lines_bitset;
     std::vector<uint32_t> visible_lines;
 
-    GLuint visibility_VAO;
-    GLuint visibility_boxes_vertex_buffer, visibility_boxes_index_buffer, visible_boxes_texture, visible_boxes_buffer;
-    size_t index_buffer_size;
+    std::future<void> filtering_work{};
+    GLuint            visibility_VAO;
+    GLuint            visibility_boxes_vertex_buffer, visibility_boxes_index_buffer, visible_boxes_texture, visible_boxes_buffer;
+    size_t            index_buffer_size;
     std::vector<std::pair<glm::ivec3, std::vector<uint32_t>>> visibility_boxes_with_segments;
-    std::pair<size_t, sul::dynamic_bitset<>> visible_boxes_bitset;
+    bitset::BitSet<>                                          visible_boxes_bitset;
 };
 
 void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& path_points)
@@ -417,10 +412,10 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     std::vector<glm::vec3> positions;
     std::vector<glm::vec3> height_width_color;
 
-    result.enabled_lines_bitset = {path_points.size(), sul::dynamic_bitset<>(path_points.size())};
-    result.enabled_lines_bitset.second.set();
-    result.visible_lines_bitset = {path_points.size(), sul::dynamic_bitset<>(path_points.size())};
-    result.visible_lines_bitset.second.reset();
+    result.enabled_lines_bitset = bitset::BitSet<>(path_points.size());
+    result.enabled_lines_bitset.setAll();
+    result.visible_lines_bitset = bitset::BitSet<>(path_points.size());
+    result.visible_lines_bitset.clear();
 
     std::unordered_map<glm::ivec3, std::unordered_set<size_t>> visibility_boxes;
 
@@ -437,7 +432,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
             }
         } else {
             // the connection is invalid, there should be no line rendered, ever
-            result.enabled_lines_bitset.second[i] = false;
+            result.enabled_lines_bitset.reset(i);
         }
 
         const PathPoint &p = path_points[i];
@@ -475,8 +470,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
             }
         }
 
-        result.visible_boxes_bitset = {result.visibility_boxes_with_segments.size(),
-                                sul::dynamic_bitset<>(result.visibility_boxes_with_segments.size())};
+        result.visible_boxes_bitset = bitset::BitSet<>(result.visibility_boxes_with_segments.size());
 
         glGenVertexArrays(1, &result.visibility_VAO);
         glBindVertexArray(result.visibility_VAO);
