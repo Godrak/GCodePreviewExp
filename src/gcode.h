@@ -235,14 +235,14 @@ void set_ranges(const std::vector<PathPoint>& path_points)
 
 struct BufferedPath
 {
-    GLuint                positions_texture, positions_buffer;
-    GLuint                height_width_color_texture, height_width_color_buffer;
-    GLuint                visible_segments_texture, visible_segments_buffer;
-    size_t                visible_segments_count;
-    size_t                total_points_count;
-    bitset::BitSet<>      enabled_lines_bitset;
-    bitset::BitSet<std::atomic_size_t>      visible_lines_bitset;
-    std::vector<uint32_t> visible_lines;
+    GLuint                             positions_texture, positions_buffer;
+    GLuint                             height_width_color_texture, height_width_color_buffer;
+    GLuint                             visible_segments_texture, visible_segments_buffer;
+    size_t                             visible_segments_count;
+    size_t                             total_points_count;
+    bitset::BitSet<>                   enabled_lines_bitset;
+    bitset::BitSet<std::atomic_size_t> visible_lines_bitset;
+    std::vector<uint32_t>              visible_lines;
 
     std::future<void> filtering_work{};
     GLuint            visibility_VAO;
@@ -252,7 +252,7 @@ struct BufferedPath
     bitset::BitSet<>                                          visible_boxes_bitset;
 };
 
-void updatePathColors(const BufferedPath& path, const std::vector<PathPoint>& path_points)
+void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &path_points)
 {
     auto select_color = [](const PathPoint& p) {
         static const std::array<float, 3> error_color = { 0.5f, 0.5f, 0.5f };

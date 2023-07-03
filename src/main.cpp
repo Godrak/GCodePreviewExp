@@ -584,26 +584,24 @@ void render(gcode::BufferedPath &path)
                      visibility_pixels_data.data());
 
         path.filtering_work = filtering_worker.enqueue([&path]() {
-            // race condition here, but can be probably ignored?
-            std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(),
-                          [&path](GLuint box_id) { path.visible_boxes_bitset.set(box_id); });
+            std::cout << "Filtering starts " << glfwGetTime() << std::endl;
 
-
-            path.visible_lines_bitset.clear();
-            for (size_t box_id = 0; box_id < path.visible_boxes_bitset.size; box_id++) {
-                if (path.visible_boxes_bitset[box_id]) {
+            std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(), [&path](GLuint box_id) {
+                bool old = path.visible_boxes_bitset[box_id];
+                path.visible_boxes_bitset.set(box_id);
+                if (!old) {
                     for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
-                        path.visible_lines_bitset.set(line_idx);
+                        path.visible_lines_bitset.set_atomic(line_idx);
                     }
                 }
-            }
+            });
+
+            std::cout << "half time " << glfwGetTime() << std::endl;
 
             path.visible_lines.clear();
-            for (size_t line_id = 0; line_id < path.visible_lines_bitset.size; line_id++) {
-                if (path.visible_lines_bitset[line_id]){
-            path.visible_lines.push_back(line_id); 
-                }
-            }
+            path.visible_lines_bitset.getEnabledIndices(path.visible_lines);
+            
+            std::cout << "filtetring done " << glfwGetTime() << std::endl;
         });
     }
 

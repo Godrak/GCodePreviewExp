@@ -52,6 +52,19 @@ public:
         return ((blocks[block_idx] >> bit_idx) & 1) != 0;
     }
 
+    template<typename U> void getEnabledIndices(std::vector<U> &dest) const
+    {
+        for (unsigned int block_idx = 0; block_idx < blocks.size(); ++block_idx) {
+            T block = blocks[block_idx].load();
+            while (block != 0) {
+                unsigned int bit_idx = __builtin_ctzll(block); // Find the index of the least significant bit
+                unsigned int index   = block_idx * (sizeof(T) * 8) + bit_idx;
+                dest.push_back(index);
+                block &= (block - 1); // Clear the least significant bit
+            }
+        }
+    }
+
     BitSet operator&(const BitSet &other) const
     {
         BitSet result(size);
@@ -70,20 +83,22 @@ public:
         return result;
     }
 
-    // Atomic set operation (enabled only for atomic types)
-    template<typename U = T> inline typename std::enable_if<is_atomic<U>>::type set_atomic(unsigned int index)
+    // Atomic set operation (enabled only for atomic types), return true if bit changed
+    template<typename U = T> inline typename std::enable_if<is_atomic<U>, bool>::type set_atomic(unsigned int index)
     {
         const auto [block_idx, bit_idx] = get_coords(index);
         T mask                          = static_cast<T>(1) << bit_idx;
-        blocks[block_idx].fetch_or(mask, std::memory_order_relaxed);
+        T oldval                        = blocks[block_idx].fetch_or(mask, std::memory_order_relaxed);
+        return oldval xor (oldval or mask);
     }
 
-    // Atomic reset operation (enabled only for atomic types)
-    template<typename U = T> inline typename std::enable_if<is_atomic<U>>::type reset_atomic(unsigned int index)
+    // Atomic reset operation (enabled only for atomic types), returns old value
+    template<typename U = T> inline typename std::enable_if<is_atomic<U>, bool>::type reset_atomic(unsigned int index)
     {
         const auto [block_idx, bit_idx] = get_coords(index);
         T mask                          = ~(static_cast<T>(1) << bit_idx);
-        blocks[block_idx].fetch_and(mask, std::memory_order_relaxed);
+        T oldval                        = blocks[block_idx].fetch_and(mask, std::memory_order_relaxed);
+        return oldval xor (oldval and mask);
     }
 
     std::pair<unsigned int, unsigned int> get_coords(unsigned int index) const
