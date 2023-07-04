@@ -595,7 +595,7 @@ void render(gcode::BufferedPath &path)
             std::cout << "Filtering starts " << glfwGetTime() << std::endl;
 
             std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(), [&path](GLuint box_id) {
-                path.visible_boxes_heat[box_id] = 10 + 10 * float(rand()) / RAND_MAX;
+                path.visible_boxes_heat[box_id] = 44 + 20 * (rand() / float(RAND_MAX));
             });
 
             std::cout << "heat assigned " << glfwGetTime() << std::endl;
