@@ -13,6 +13,7 @@
 
 namespace globals {
 glm::ivec2 screenResolution = {512,512};
+glm::ivec2 visibilityResolution = {512,512};
 }
 
 namespace config {

@@ -538,9 +538,8 @@ void render(gcode::BufferedPath &path)
     checkGl();
     if (new_size != globals::screenResolution) {
         globals::screenResolution = new_size;
-        glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
+        globals::visibilityResolution = globals::screenResolution / 4;
         gcode::recreateVisibilityBufferOnResolutionChange();
-        visibility_pixels_data.resize(globals::screenResolution.x * globals::screenResolution.y);
     }
 
     if (config::with_visibility_pass &&
@@ -554,8 +553,8 @@ void render(gcode::BufferedPath &path)
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, gcode::visibilityFramebuffer);
-        glBlitFramebuffer(0, 0, globals::screenResolution.x, globals::screenResolution.y, 0, 0, globals::screenResolution.x,
-                          globals::screenResolution.y, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        glBlitFramebuffer(0, 0, globals::screenResolution.x, globals::screenResolution.y, 0, 0, globals::visibilityResolution.x,
+                          globals::visibilityResolution.y, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 
         glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
         checkGl();
@@ -563,7 +562,7 @@ void render(gcode::BufferedPath &path)
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         checkGl();
-        glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
+        glViewport(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y);
         checkGl();
 
         glBindBuffer(GL_TEXTURE_BUFFER, path.visible_boxes_buffer);
@@ -588,7 +587,8 @@ void render(gcode::BufferedPath &path)
 
         glDrawElements(GL_TRIANGLES, path.index_buffer_size, GL_UNSIGNED_INT, 0);
 
-        glReadPixels(0, 0, globals::screenResolution.x, globals::screenResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT,
+        visibility_pixels_data.resize(globals::visibilityResolution.x * globals::visibilityResolution.y);
+        glReadPixels(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT,
                      visibility_pixels_data.data());
 
         path.filtering_work = filtering_worker.enqueue([&path]() {

@@ -594,7 +594,7 @@ void recreateVisibilityBufferOnResolutionChange()
     glActiveTexture(GL_TEXTURE1);
     glGenTextures(1, &instanceIdsTexture);
     glBindTexture(GL_TEXTURE_2D, instanceIdsTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, globals::screenResolution.x, globals::screenResolution.y, 0, GL_RED_INTEGER, GL_UNSIGNED_INT,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, globals::visibilityResolution.x, globals::visibilityResolution.y, 0, GL_RED_INTEGER, GL_UNSIGNED_INT,
                  nullptr);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, instanceIdsTexture, 0);
 
@@ -603,7 +603,7 @@ void recreateVisibilityBufferOnResolutionChange()
     glActiveTexture(GL_TEXTURE2);
     glGenTextures(1, &depthTexture);
     glBindTexture(GL_TEXTURE_2D, depthTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::screenResolution.x, globals::screenResolution.y, 0,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::visibilityResolution.x, globals::visibilityResolution.y, 0,
                  GL_DEPTH_COMPONENT, GL_FLOAT, 0);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
 
