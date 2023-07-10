@@ -36,12 +36,13 @@ GLint vid_loc = 0;
 
 size_t vertex_data_size = 18;
 int vertex_data[] = {  
-        0, 1, 2,  // left side of box (for common depiction of a box, where left, right and top sides are visible)
-        0, 2, 3,
+    //(for common depiction of a box, where front, right and top sides are visible), set 0 to closest (middle) point, and asign numbers from top left in CCW dir
+        0, 1, 3,  // left side of box 
+        1, 2, 3,
         0, 3, 4,  // right side of box    
         0, 4, 5, 
-        0, 5, 6, // top side of box 
-        0, 6, 1 };
+        0, 5, 1, // top side of box 
+        5, 6, 1 };
 
 glm::vec3 unit_box_vertices[] = {
     // Front face

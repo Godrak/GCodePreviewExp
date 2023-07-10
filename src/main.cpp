@@ -668,14 +668,11 @@ void render(gcode::BufferedPath &path)
     assert(vp_id >= 0);
     const int camera_position_id = ::glGetUniformLocation(shaderProgram::gcode_program, "camera_position");
     assert(camera_position_id >= 0);
-    const int visibility_pass_id = ::glGetUniformLocation(shaderProgram::gcode_program, "visibility_pass");
-    assert(visibility_pass_id >= 0);
 
     auto view_projection = glfwContext::camera.get_view_projection();
     auto camera_position = glfwContext::camera.position;
     glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
     glUniform3fv(camera_position_id, 1, glm::value_ptr(camera_position));
-    glUniform1i(visibility_pass_id, false);
     checkGl();
 
     if (path.visible_segments_count > 0)
