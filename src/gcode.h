@@ -241,6 +241,7 @@ struct BufferedPath
     GLuint                             visible_segments_texture, visible_segments_buffer;
     size_t                             visible_segments_count;
     size_t                             total_points_count;
+    bitset::BitSet<>                   valid_lines_bitset;
     bitset::BitSet<>                   enabled_lines_bitset;
     bitset::BitSet<std::atomic_size_t> visible_lines_bitset;
     std::vector<uint32_t>              visible_lines;
@@ -253,6 +254,38 @@ struct BufferedPath
     std::vector<GLint>                                        visible_boxes_heat;
     std::uniform_int_distribution<size_t>                     visible_boxes_indices_distr;
 };
+
+void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_points) {
+    path.enabled_lines_bitset = path.valid_lines_bitset;
+    for (size_t i = 0; i < path_points.size(); i++) {
+//   { 0.90f, 0.70f, 0.70f },   // None
+//     { 1.00f, 0.90f, 0.30f },   // Perimeter
+//     { 1.00f, 0.49f, 0.22f },   // ExternalPerimeter
+//     { 0.12f, 0.12f, 1.00f },   // OverhangPerimeter
+//     { 0.69f, 0.19f, 0.16f },   // InternalInfill
+//     { 0.59f, 0.33f, 0.80f },   // SolidInfill
+//     { 0.94f, 0.25f, 0.25f },   // TopSolidInfill
+//     { 1.00f, 0.55f, 0.41f },   // Ironing
+//     { 0.30f, 0.50f, 0.73f },   // BridgeInfill
+//     { 1.00f, 1.00f, 1.00f },   // GapFill
+//     { 0.00f, 0.53f, 0.43f },   // Skirt
+//     { 0.00f, 1.00f, 0.00f },   // SupportMaterial
+//     { 0.00f, 0.50f, 0.00f },   // SupportMaterialInterface
+//     { 0.70f, 0.89f, 0.67f },   // WipeTower
+//     { 0.37f, 0.82f, 0.58f },   // Custom
+
+
+        bool is_travel = path_points[i].is_travel_move();
+        const unsigned int role = path_points[i].role_from_flags();
+
+        if (!config::view_travel_paths && is_travel) path.enabled_lines_bitset.reset(i);
+        if (!config::view_perimeters && (role == 2)) path.enabled_lines_bitset.reset(i);
+        if (!config::view_inner_perimeters && (role == 1 || role == 3)) path.enabled_lines_bitset.reset(i);
+        if (!config::view_internal_infill && (role == 4)) path.enabled_lines_bitset.reset(i);
+        if (!config::view_solid_infills && (role == 5 || role == 6 || role == 8)) path.enabled_lines_bitset.reset(i);
+        if (!config::view_supports && (role == 11 || role == 12)) path.enabled_lines_bitset.reset(i);
+    }
+}
 
 void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &path_points)
 {
@@ -415,8 +448,8 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     std::vector<glm::vec3> positions;
     std::vector<glm::vec3> height_width_color;
 
-    result.enabled_lines_bitset = bitset::BitSet<>(path_points.size());
-    result.enabled_lines_bitset.setAll();
+    result.valid_lines_bitset = bitset::BitSet<>(path_points.size());
+    result.valid_lines_bitset.setAll();
     result.visible_lines_bitset = bitset::BitSet<std::atomic_size_t>(path_points.size());
     result.visible_lines_bitset.clear();
 
@@ -435,7 +468,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
             }
         } else {
             // the connection is invalid, there should be no line rendered, ever
-            result.enabled_lines_bitset.reset(i);
+            result.valid_lines_bitset.reset(i);
         }
 
         const PathPoint &p = path_points[i];

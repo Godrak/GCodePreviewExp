@@ -91,20 +91,6 @@ void createVisibilityProgram() {
 		exit(-1);
 }
 
-void createCheapProgram() {
-	loadAndCompileShader(shaders_path + "gcode_shaders/v_shader.glsl", cheap_v_shader,
-	GL_VERTEX_SHADER);
-	loadAndCompileShader(shaders_path + "gcode_shaders/cheap_f_shader.glsl", cheap_f_shader,
-		GL_FRAGMENT_SHADER);
-
-	cheap_program = glCreateProgram();
-	glAttachShader(cheap_program, cheap_v_shader);
-	glAttachShader(cheap_program, cheap_f_shader);
-	glLinkProgram(cheap_program);
-	if (!check_program(cheap_program, GL_LINK_STATUS))
-		exit(-1);
-}
-
 }
 
 #endif /* SHADERS_H_ */

@@ -298,7 +298,12 @@ void show_config_window()
     ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
     if (ImGui::Checkbox("with_visibility_pass", &config::with_visibility_pass)) {}
     if (ImGui::Checkbox("force_full_model_render", &config::force_full_model_render)) {}
-    if (ImGui::Checkbox("use_cheap_frag_shader", &config::use_cheap_frag_shader)) {}
+    if (ImGui::Checkbox("view_travel_paths", &config::view_travel_paths)) { config::enabled_paths_update_required = true;}
+    if (ImGui::Checkbox("view_perimeters", &config::view_perimeters)) { config::enabled_paths_update_required = true;}
+    if (ImGui::Checkbox("view_inner_perimeters", &config::view_inner_perimeters)) { config::enabled_paths_update_required = true;}
+    if (ImGui::Checkbox("view_internal_infill", &config::view_internal_infill)) { config::enabled_paths_update_required = true;}
+    if (ImGui::Checkbox("view_solid_infills", &config::view_solid_infills)) { config::enabled_paths_update_required = true;}
+    if (ImGui::Checkbox("view_supports", &config::view_supports)) { config::enabled_paths_update_required = true;}
     if (ImGui::Checkbox("vsync", &config::vsync)) {}
     if (ImGui::Checkbox("use_travel_moves_data", &config::use_travel_moves_data)) {
         config::ranges_update_required = true;
@@ -613,6 +618,8 @@ void render(gcode::BufferedPath &path)
                 heat--;
             });
 
+            path.visible_lines_bitset &= path.enabled_lines_bitset;
+
             std::cout << "enabled hot lines " << glfwGetTime() << std::endl;
 
             path.visible_lines.clear();
@@ -632,11 +639,7 @@ void render(gcode::BufferedPath &path)
     glViewport(0, 0, globals::screenResolution.x, globals::screenResolution.y);
     checkGl();
 
-    if (config::use_cheap_frag_shader) {
-        glUseProgram(shaderProgram::cheap_program);
-    } else {
-        glUseProgram(shaderProgram::gcode_program);
-    }
+    glUseProgram(shaderProgram::gcode_program);
     glBindVertexArray(gcode::gcodeVAO);
     checkGl();
 
@@ -687,7 +690,6 @@ void setup()
 {
     shaderProgram::createGCodeProgram();
     shaderProgram::createVisibilityProgram();
-    shaderProgram::createCheapProgram();
     gcode::init();
     checkGl();
 }
@@ -834,6 +836,11 @@ int main(int argc, char *argv[])
         if (config::color_update_required) {
             gcode::updatePathColors(path, points);
             config::color_update_required = false;
+        }
+
+         if (config::enabled_paths_update_required) {
+            gcode::updateEnabledLines(path, points);
+            config::enabled_paths_update_required = false;
         }
 
         // Start the Dear ImGui frame

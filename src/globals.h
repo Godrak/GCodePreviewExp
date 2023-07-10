@@ -28,7 +28,13 @@ bool camera_center_required = true;
 bool use_travel_moves_data = true;
 bool window_minimized = false;
 bool force_full_model_render = false;
-bool use_cheap_frag_shader = false;
+bool view_travel_paths = true;
+bool view_perimeters = true;
+bool view_inner_perimeters = true;
+bool view_internal_infill = true;
+bool view_solid_infills = true;
+bool view_supports = true;
+bool enabled_paths_update_required = true;
 
 size_t camera_prediction_frames = 4;
 size_t visiblity_multiframes_count = 10;

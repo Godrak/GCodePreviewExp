@@ -73,22 +73,14 @@ public:
         }
     }
 
-    BitSet operator&(const BitSet &other) const
+    template<typename U>
+    BitSet& operator&=(const BitSet<U> &other)
     {
-        BitSet result(size);
+        static_assert(sizeof(T) == sizeof(U), "Type1 and Type2 must be of the same size.");
         for (unsigned int i = 0; i < blocks.size(); ++i) {
-            result.blocks[i] = blocks[i] & other.blocks[i];
+            blocks[i] &= other.blocks[i];
         }
-        return result;
-    }
-
-    BitSet operator|(const BitSet &other) const
-    {
-        BitSet result(size);
-        for (unsigned int i = 0; i < blocks.size(); ++i) {
-            result.blocks[i] = blocks[i] | other.blocks[i];
-        }
-        return result;
+        return *this;
     }
 
     // Atomic set operation (enabled only for atomic types), return true if bit changed
