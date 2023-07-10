@@ -90,7 +90,7 @@ void main() {
         vec3( 1.0,  0.0,  1.0)
     );
 
-    vec3 camera_view_dir = 0.5*(pos_a + pos_b) - camera_position;
+    vec3 camera_view_dir = (id_close == id_a ? pos_a : pos_b) - camera_position;
     bool is_horizontal_view = abs(dot(camera_view_dir, right_dir)) > abs(dot(camera_view_dir, up_dir));
 
     vec3 signs = horizontal_vertical_view_signs_array[vertex_id + 7*int(!is_horizontal_view)];
