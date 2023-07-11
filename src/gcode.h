@@ -37,12 +37,12 @@ GLint vid_loc = 0;
 size_t vertex_data_size = 18;
 int vertex_data[] = {  
     //(for common depiction of a box, where front, right and top sides are visible), set 0 to closest (middle) point, and asign numbers from top left in CCW dir
-        0, 1, 3,  // left side of box 
-        1, 2, 3,
+        0, 1, 2,  // left side of box 
+        0, 2, 3,
         0, 3, 4,  // right side of box    
         0, 4, 5, 
-        0, 5, 1, // top side of box 
-        5, 6, 1 };
+        0, 5, 6, // top side of box 
+        0, 6, 1 };
 
 glm::vec3 unit_box_vertices[] = {
     // Front face
@@ -237,7 +237,8 @@ void set_ranges(const std::vector<PathPoint>& path_points)
 struct BufferedPath
 {
     GLuint                             positions_texture, positions_buffer;
-    GLuint                             height_width_color_texture, height_width_color_buffer;
+    GLuint                             height_width_angle_texture, height_width_angle_buffer;
+    GLuint                             color_texture, color_buffer;
     GLuint                             visible_segments_texture, visible_segments_buffer;
     size_t                             visible_segments_count;
     size_t                             total_points_count;
@@ -353,20 +354,14 @@ void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &pa
         return float(i_color);
     };
 
-    assert(path.height_width_color_buffer > 0);
-    glBindBuffer(GL_TEXTURE_BUFFER, path.height_width_color_buffer);
-
-    const char* ptr = (const char*)glMapBuffer(GL_TEXTURE_BUFFER, GL_WRITE_ONLY);
-
-    assert(ptr != nullptr);
-
+    std::vector<float> colors(path_points.size());
     for (size_t i = 0; i < path_points.size(); i++) {
-        const float color = format_color(path_points[i]);
-        const size_t offset = (i * 3 + 2) * sizeof(float);
-        memcpy((void*)(ptr + offset), (const void*)&color, sizeof(color));
+        colors[i] = format_color(path_points[i]);
     }
-
-    glUnmapBuffer(GL_TEXTURE_BUFFER);
+    assert(path.color_buffer > 0);
+    glBindBuffer(GL_TEXTURE_BUFFER, path.color_buffer);
+    // buffer data to the path buffer
+    glBufferData(GL_TEXTURE_BUFFER, colors.size() * sizeof(float), colors.data(), GL_STATIC_DRAW);
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
 }
 
@@ -557,23 +552,40 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
      // Create a buffer object and bind it to the texture buffer
-    glGenBuffers(1, &result.height_width_color_buffer);
-    glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_color_buffer);
+    glGenBuffers(1, &result.height_width_angle_buffer);
+    glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_angle_buffer);
 
     // buffer data to the path buffer
     glBufferData(GL_TEXTURE_BUFFER, height_width_color.size() * sizeof(glm::vec3), height_width_color.data(), GL_DYNAMIC_DRAW);
 
     // Create and bind the path texture
-    glGenTextures(1, &result.height_width_color_texture);
-    glBindTexture(GL_TEXTURE_BUFFER, result.height_width_color_texture);
+    glGenTextures(1, &result.height_width_angle_texture);
+    glBindTexture(GL_TEXTURE_BUFFER, result.height_width_angle_texture);
 
     // Attach the buffer object to the texture buffer
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, result.height_width_color_buffer);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, result.height_width_angle_buffer);
 
     // Unbind the buffer object and the texture buffer
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
+    //COLOR BUFFER
+    // Create a buffer object and bind it to the texture buffer
+    glGenBuffers(1, &result.color_buffer);
+    glBindBuffer(GL_TEXTURE_BUFFER, result.color_buffer);
+
+    // Create and bind the path texture
+    glGenTextures(1, &result.color_texture);
+    glBindTexture(GL_TEXTURE_BUFFER, result.color_texture);
+
+    // Attach the buffer object to the texture buffer
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, result.color_buffer);
+
+    // Unbind the buffer object and the texture buffer
+    glBindBuffer(GL_TEXTURE_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_BUFFER, 0);
+
+    //VISIBLE SEGMENTS BUFFER
    // Create a buffer object and bind it to the texture buffer
     glGenBuffers(1, &result.visible_segments_buffer);
     glBindBuffer(GL_TEXTURE_BUFFER, result.visible_segments_buffer);

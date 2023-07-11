@@ -5,7 +5,8 @@ uniform vec3 camera_position;
 uniform int instance_base;
 
 uniform samplerBuffer positionsTex;
-uniform samplerBuffer heightWidthColorTex;
+uniform samplerBuffer heightWidthAngleTex;
+uniform samplerBuffer colorsTex;
 uniform isamplerBuffer segmentIndexTex;
 
 vec3 decode_color(float color)
@@ -73,6 +74,7 @@ void main() {
 
     // third coordinate is -1 for vertices that should use id_close pos, and 1 for id_far vertices
     const vec3 horizontal_vertical_view_signs_array[14] = vec3[](
+        //horizontal view
         vec3( 1.0,  0.0, -1.0),
         vec3( 0.0,  1.0, -1.0),
         vec3(-1.0,  0.0, -1.0),
@@ -82,16 +84,16 @@ void main() {
         vec3( 0.0,  1.0,  1.0),
         // vertical view signs and id
         vec3( 0.0,  1.0, -1.0),
-        vec3( 0.0,  1.0,  1.0),
-        vec3(-1.0,  0.0,  1.0),
         vec3(-1.0,  0.0, -1.0),
         vec3( 0.0, -1.0, -1.0),
         vec3( 1.0,  0.0, -1.0),
-        vec3( 1.0,  0.0,  1.0)
+        vec3( 1.0,  0.0,  1.0),
+        vec3( 0.0,  1.0,  1.0),
+        vec3(-1.0,  0.0,  1.0)
     );
 
     vec3 camera_view_dir = normalize((id_close == id_a ? pos_a : pos_b) - camera_position);
-    vec2 close_height_width = texelFetch(heightWidthColorTex, id_close).xy;
+    vec2 close_height_width = texelFetch(heightWidthAngleTex, id_close).xy;
     float vertical_part = abs(dot(camera_view_dir, up_dir)) - close_height_width.x;
     float horizontal_part = abs(dot(camera_view_dir, right_dir)) - close_height_width.y;
     bool is_vertical_view = vertical_part > horizontal_part;
@@ -100,14 +102,9 @@ void main() {
 
     int id_final = signs.z < 0 ? id_close : id_far;
     
-    vec3 height_width_color = texelFetch(heightWidthColorTex, id_final).xyz;
-    float half_height = 0.5 * height_width_color.x;
-    float half_width = 0.5 * height_width_color.y;
-
-    // extend beyond the path points by half width - It allows for seamless connections, 
-    // also it better represents the reality (with the caps rounded in frag shader)
-    float cap_sign = signs.z;
-    vec3 cap = 0.5 * half_width * line_dir * dir_sign * cap_sign;
+    vec3 height_width_angle = texelFetch(heightWidthAngleTex, id_final).xyz;
+    float half_height = 0.5 * height_width_angle.x;
+    float half_width = 0.5 * height_width_angle.y;
 
     vec3 horizontal_dir = half_width * right_dir * -sign(dot(view_a, right_dir));
     vec3 vertical_dir = half_height * up_dir * -sign(dot(view_a, up_dir));
@@ -116,7 +113,7 @@ void main() {
     pos = segment_pos + signs.x * horizontal_dir + signs.y * vertical_dir;
     
     //LIGHT
-	vec3 color_base = decode_color(height_width_color.z);
+	vec3 color_base = decode_color(texelFetch(colorsTex, id_final).x);
     vec3 normal = normalize(pos - segment_pos);
 
     vec3 light_top_dir = vec3(-0.4574957, 0.4574957, 0.7624929);
@@ -132,7 +129,6 @@ void main() {
     color = color_base * (ambient + light_top_diffuse * diffuseFactor + light_front_diffuse * diffuseFactor2);
     // LIGHT end
         
-    if (vertex_id == 1 || vertex_id == 3) pos += cap;
     gl_Position = view_projection * vec4(pos, 1.0);
 }
 

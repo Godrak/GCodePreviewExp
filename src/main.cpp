@@ -645,14 +645,17 @@ void render(gcode::BufferedPath &path)
 
     const int positions_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "positionsTex");
     assert(positions_tex_id >= 0);
-    const int height_width_color_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthColorTex");
-    assert(height_width_color_tex_id >= 0);
+    const int height_width_angle_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthAngleTex");
+    assert(height_width_angle_tex_id >= 0);
+     const int colors_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "colorsTex");
+    assert(colors_tex_id >= 0);
     const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "segmentIndexTex");
     assert(segment_index_tex_id >= 0);
 
     glUniform1i(positions_tex_id, 0);
-    glUniform1i(height_width_color_tex_id, 1);
-    glUniform1i(segment_index_tex_id, 2);
+    glUniform1i(height_width_angle_tex_id, 1);
+    glUniform1i(colors_tex_id, 2);
+    glUniform1i(segment_index_tex_id, 3);
     checkGl();
 
     glActiveTexture(GL_TEXTURE0);
@@ -660,10 +663,14 @@ void render(gcode::BufferedPath &path)
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
 
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_BUFFER, path.height_width_color_texture);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_color_buffer);
+    glBindTexture(GL_TEXTURE_BUFFER, path.height_width_angle_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_angle_buffer);
 
     glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_BUFFER, path.color_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, path.color_buffer);
+
+    glActiveTexture(GL_TEXTURE3);
     glBindTexture(GL_TEXTURE_BUFFER, path.visible_segments_texture);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_segments_buffer);
 
