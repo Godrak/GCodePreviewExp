@@ -35,16 +35,22 @@ GLuint pathSSBObindPoint = 5;
 
 GLint vid_loc = 0;
 
-
-size_t vertex_data_size = 18;
+//     /1-------6\    
+//    / |       | \  
+//   2  0-------5  7
+//    \ |       | /  
+//      3-------4    
+size_t vertex_data_size = 24;
 int vertex_data[] = {  
-    //(for common depiction of a box, where front, right and top sides are visible), set 0 to closest (middle) point, and asign numbers from top left in CCW dir
-        0, 1, 2,  // left side of box 
-        0, 2, 3,
-        0, 3, 4,  // right side of box    
-        0, 4, 5, 
-        0, 5, 6, // top side of box 
-        0, 6, 1 };
+        0, 1, 2,  // front spike
+        0, 2, 3,// front spike
+        0, 3, 4, //right/bottom body 
+        0, 4, 5, //right/bottom body 
+        0, 5, 6, //left/top body 
+        0, 6, 1, //left/top body 
+        5, 4, 7, // back spike
+        5, 7, 6, // back spike
+        };
 
 glm::vec3 unit_box_vertices[] = {
     // Front face

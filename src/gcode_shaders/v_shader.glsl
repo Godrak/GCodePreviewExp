@@ -72,7 +72,7 @@ void main() {
     // vertex_position = pos_far + horizontal_dir;    5
     // vertex_position = pos_far + vertical_dir;    6
 
-    const vec2 horizontal_vertical_view_signs_array[14] = vec2[](
+    const vec2 horizontal_vertical_view_signs_array[16] = vec2[](
         //horizontal view
         vec2( 1.0,  0.0),
         vec2( 0.0,  1.0),
@@ -81,6 +81,7 @@ void main() {
         vec2( 0.0, -1.0),
         vec2( 1.0,  0.0),
         vec2( 0.0,  1.0),
+        vec2( 0.0,  1.0),
         // vertical view
         vec2( 0.0,  1.0),
         vec2(-1.0,  0.0),
@@ -88,6 +89,7 @@ void main() {
         vec2( 1.0,  0.0),
         vec2( 1.0,  0.0),
         vec2( 0.0,  1.0),
+        vec2(-1.0,  0.0),
         vec2(-1.0,  0.0)
     );
 
@@ -97,7 +99,9 @@ void main() {
     float horizontal_part = abs(dot(camera_view_dir, right_dir)) - close_height_width_angle.y;
     bool is_vertical_view = vertical_part > horizontal_part;
 
-    vec2 signs = horizontal_vertical_view_signs_array[vertex_id + 7*int(is_vertical_view)];
+    //TODO THe problem with the blue side is that you are using wrong width!
+
+    vec2 signs = horizontal_vertical_view_signs_array[vertex_id + 8*int(is_vertical_view)];
 
     int id_final = vertex_id < 4 ? id_close : id_far;
     
@@ -111,15 +115,16 @@ void main() {
 	vec3 segment_pos = (id_final == id_a) ? pos_a : pos_b;
     pos = segment_pos + signs.x * horizontal_dir + signs.y * vertical_dir;
 
-    if (vertex_id == 2) {
-        float line_dir_sign = id_close == id_a ? -1.0 : 1.0;
+    if (vertex_id == 2 || vertex_id == 7) {
+        float line_dir_sign = id_final == id_a ? -1.0 : 1.0;
         pos = segment_pos + line_dir_sign * line_dir * close_height_width_angle.y * 0.5 * sin(close_height_width_angle.z * 0.5);
-        pos += (right_dir) * close_height_width_angle.y * 0.5 * cos(close_height_width_angle.z * 0.5);
+        pos += right_dir * close_height_width_angle.y * 0.5 * cos(close_height_width_angle.z * 0.5);
     }
 
     //LIGHT
 	vec3 color_base = decode_color(texelFetch(colorsTex, id_final).x);
-    // if (vertex_id == 2) color_base = vec3(1,0,0);
+    if (vertex_id == 2) color_base = vec3(1.0,0.0,0.0);
+    if (vertex_id == 7) color_base = vec3(0.0,0.0,1.0);
     vec3 normal = normalize(pos - segment_pos);
 
     vec3 light_top_dir = vec3(-0.4574957, 0.4574957, 0.7624929);
