@@ -90,10 +90,13 @@ void main() {
         vec3( 1.0,  0.0,  1.0)
     );
 
-    vec3 camera_view_dir = (id_close == id_a ? pos_a : pos_b) - camera_position;
-    bool is_horizontal_view = abs(dot(camera_view_dir, right_dir)) > abs(dot(camera_view_dir, up_dir));
+    vec3 camera_view_dir = normalize((id_close == id_a ? pos_a : pos_b) - camera_position);
+    vec2 close_height_width = texelFetch(heightWidthColorTex, id_close).xy;
+    float vertical_part = abs(dot(camera_view_dir, up_dir)) - close_height_width.x;
+    float horizontal_part = abs(dot(camera_view_dir, right_dir)) - close_height_width.y;
+    bool is_vertical_view = vertical_part > horizontal_part;
 
-    vec3 signs = horizontal_vertical_view_signs_array[vertex_id + 7*int(!is_horizontal_view)];
+    vec3 signs = horizontal_vertical_view_signs_array[vertex_id + 7*int(is_vertical_view)];
 
     int id_final = signs.z < 0 ? id_close : id_far;
     
