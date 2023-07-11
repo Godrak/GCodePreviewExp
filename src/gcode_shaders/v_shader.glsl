@@ -72,48 +72,54 @@ void main() {
     // vertex_position = pos_far + horizontal_dir;    5
     // vertex_position = pos_far + vertical_dir;    6
 
-    // third coordinate is -1 for vertices that should use id_close pos, and 1 for id_far vertices
-    const vec3 horizontal_vertical_view_signs_array[14] = vec3[](
+    const vec2 horizontal_vertical_view_signs_array[14] = vec2[](
         //horizontal view
-        vec3( 1.0,  0.0, -1.0),
-        vec3( 0.0,  1.0, -1.0),
-        vec3(-1.0,  0.0, -1.0),
-        vec3( 0.0, -1.0, -1.0),
-        vec3( 0.0, -1.0,  1.0),
-        vec3( 1.0,  0.0,  1.0),
-        vec3( 0.0,  1.0,  1.0),
-        // vertical view signs and id
-        vec3( 0.0,  1.0, -1.0),
-        vec3(-1.0,  0.0, -1.0),
-        vec3( 0.0, -1.0, -1.0),
-        vec3( 1.0,  0.0, -1.0),
-        vec3( 1.0,  0.0,  1.0),
-        vec3( 0.0,  1.0,  1.0),
-        vec3(-1.0,  0.0,  1.0)
+        vec2( 1.0,  0.0),
+        vec2( 0.0,  1.0),
+        vec2(-1.0,  0.0),
+        vec2( 0.0, -1.0),
+        vec2( 0.0, -1.0),
+        vec2( 1.0,  0.0),
+        vec2( 0.0,  1.0),
+        // vertical view
+        vec2( 0.0,  1.0),
+        vec2(-1.0,  0.0),
+        vec2( 0.0, -1.0),
+        vec2( 1.0,  0.0),
+        vec2( 1.0,  0.0),
+        vec2( 0.0,  1.0),
+        vec2(-1.0,  0.0)
     );
 
     vec3 camera_view_dir = normalize((id_close == id_a ? pos_a : pos_b) - camera_position);
-    vec2 close_height_width = texelFetch(heightWidthAngleTex, id_close).xy;
-    float vertical_part = abs(dot(camera_view_dir, up_dir)) - close_height_width.x;
-    float horizontal_part = abs(dot(camera_view_dir, right_dir)) - close_height_width.y;
+    vec3 close_height_width_angle = texelFetch(heightWidthAngleTex, id_close).xyz;
+    float vertical_part = abs(dot(camera_view_dir, up_dir)) - close_height_width_angle.x;
+    float horizontal_part = abs(dot(camera_view_dir, right_dir)) - close_height_width_angle.y;
     bool is_vertical_view = vertical_part > horizontal_part;
 
-    vec3 signs = horizontal_vertical_view_signs_array[vertex_id + 7*int(is_vertical_view)];
+    vec2 signs = horizontal_vertical_view_signs_array[vertex_id + 7*int(is_vertical_view)];
 
-    int id_final = signs.z < 0 ? id_close : id_far;
+    int id_final = vertex_id < 4 ? id_close : id_far;
     
-    vec3 height_width_angle = texelFetch(heightWidthAngleTex, id_final).xyz;
-    float half_height = 0.5 * height_width_angle.x;
-    float half_width = 0.5 * height_width_angle.y;
+    vec2 final_height_width = texelFetch(heightWidthAngleTex, id_final).xy;
+    float half_height = 0.5 * final_height_width.x;
+    float half_width = 0.5 * final_height_width.y;
 
     vec3 horizontal_dir = half_width * right_dir * -sign(dot(view_a, right_dir));
     vec3 vertical_dir = half_height * up_dir * -sign(dot(view_a, up_dir));
 
 	vec3 segment_pos = (id_final == id_a) ? pos_a : pos_b;
     pos = segment_pos + signs.x * horizontal_dir + signs.y * vertical_dir;
-    
+
+    if (vertex_id == 2) {
+        float line_dir_sign = id_close == id_a ? -1.0 : 1.0;
+        pos = segment_pos + line_dir_sign * line_dir * close_height_width_angle.y * 0.5 * sin(close_height_width_angle.z * 0.5);
+        pos += (right_dir) * close_height_width_angle.y * 0.5 * cos(close_height_width_angle.z * 0.5);
+    }
+
     //LIGHT
 	vec3 color_base = decode_color(texelFetch(colorsTex, id_final).x);
+    // if (vertex_id == 2) color_base = vec3(1,0,0);
     vec3 normal = normalize(pos - segment_pos);
 
     vec3 light_top_dir = vec3(-0.4574957, 0.4574957, 0.7624929);

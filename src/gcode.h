@@ -7,10 +7,12 @@
 
 #include "bitset.h"
 #include "glad/glad.h"
+#include "glm/geometric.hpp"
 #include "globals.h"
 #include "camera.h"
 
 #include <cstddef>
+#include <math.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -441,7 +443,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     BufferedPath result;
 
     std::vector<glm::vec3> positions;
-    std::vector<glm::vec3> height_width_color;
+    std::vector<glm::vec3> height_width_angle;
 
     result.valid_lines_bitset = bitset::BitSet<>(path_points.size());
     result.valid_lines_bitset.setAll();
@@ -455,7 +457,13 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     visibility_boxes[max_coords] = {};
 
     for (size_t i = 0; i < path_points.size(); i++) {
-        if (i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position) {
+        bool      prev_line_valid = i > 0 && result.valid_lines_bitset[i - 1];
+        glm::vec3 prev_line       = prev_line_valid ? (path_points[i].position - path_points[i - 1].position) : glm::vec3(0);
+
+        bool      this_line_valid = i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position;
+        glm::vec3 this_line       = this_line_valid ? (path_points[i + 1].position - path_points[i].position) : glm::vec3(0);
+
+        if (this_line_valid) {
             // there is a valid path between point i and i+1.
             auto covered = get_covered_voxels(path_points[i].position, path_points[i + 1].position);
             for (const auto &coords : covered) {
@@ -471,7 +479,9 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
         const float height = p.is_travel_move() ? 0.1f : p.height;
         const float width  = p.is_travel_move() ? 0.1f : p.width;
 
-        height_width_color.push_back({height, width, 0.0f}); // color will be set later with updatePathColors()
+        const float angle = atan2(prev_line.x * this_line.y - prev_line.y * this_line.x, glm::dot(prev_line, this_line));
+
+        height_width_angle.push_back({height, width, angle}); 
     }
 
     result.total_points_count = path_points.size();
@@ -556,7 +566,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_angle_buffer);
 
     // buffer data to the path buffer
-    glBufferData(GL_TEXTURE_BUFFER, height_width_color.size() * sizeof(glm::vec3), height_width_color.data(), GL_DYNAMIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, height_width_angle.size() * sizeof(glm::vec3), height_width_angle.data(), GL_DYNAMIC_DRAW);
 
     // Create and bind the path texture
     glGenTextures(1, &result.height_width_angle_texture);
