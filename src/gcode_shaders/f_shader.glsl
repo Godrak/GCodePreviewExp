@@ -4,9 +4,6 @@
     precision mediump float;
 #endif
 
-flat in int id_a;
-flat in int id_b;
-in vec3 pos;
 in vec3 color;
 
 out vec4 fragmentColor;

@@ -21,9 +21,6 @@ vec3 decode_color(float color)
 
 in int vertex_id;
 
-flat out int id_a;
-flat out int id_b;
-out vec3 pos;
 out vec3 color;
 
 void main() {
@@ -31,8 +28,8 @@ void main() {
 
     // Retrieve the instance ID
     int id_position = gl_InstanceID;
-    id_a = int(texelFetch(segmentIndexTex, int(id_position)).r);
-    id_b = id_a + 1;
+    int id_a = int(texelFetch(segmentIndexTex, int(id_position)).r);
+    int id_b = id_a + 1;
 
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
     vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
@@ -113,7 +110,7 @@ void main() {
     vec3 vertical_dir = half_height * up_dir * -sign(dot(view_a, up_dir));
 
 	vec3 segment_pos = (id_final == id_a) ? pos_a : pos_b;
-    pos = segment_pos + signs.x * horizontal_dir + signs.y * vertical_dir;
+    vec3 pos = segment_pos + signs.x * horizontal_dir + signs.y * vertical_dir;
 
     if (vertex_id == 2 || vertex_id == 7) {
         float line_dir_sign = id_final == id_a ? -1.0 : 1.0;
