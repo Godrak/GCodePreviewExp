@@ -93,21 +93,21 @@ void main() {
         vec2(-1.0,  0.0)
     );
 
+    int id_final = vertex_id < 4 ? id_close : id_far;
+
     vec3 camera_view_dir = normalize((id_close == id_a ? pos_a : pos_b) - camera_position);
     vec3 close_height_width_angle = texelFetch(heightWidthAngleTex, id_close).xyz;
-    float vertical_part = abs(dot(camera_view_dir, up_dir)) - close_height_width_angle.x;
-    float horizontal_part = abs(dot(camera_view_dir, right_dir)) - close_height_width_angle.y;
-    bool is_vertical_view = vertical_part > horizontal_part;
 
-    //TODO THe problem with the blue side is that you are using wrong width!
+    vec3 diagonal_dir_border = normalize(close_height_width_angle.x * up_dir + close_height_width_angle.y * right_dir);
+    bool is_vertical_view = abs(dot(camera_view_dir, up_dir)) / abs(dot(diagonal_dir_border, up_dir)) >
+        abs(dot(camera_view_dir, right_dir)) / abs(dot(diagonal_dir_border, right_dir));
+
 
     vec2 signs = horizontal_vertical_view_signs_array[vertex_id + 8*int(is_vertical_view)];
 
-    int id_final = vertex_id < 4 ? id_close : id_far;
-    
-    vec2 final_height_width = texelFetch(heightWidthAngleTex, id_final).xy;
-    float half_height = 0.5 * final_height_width.x;
-    float half_width = 0.5 * final_height_width.y;
+    vec3 final_height_width_angle = texelFetch(heightWidthAngleTex, id_final).xyz;
+    float half_height = 0.5 * final_height_width_angle.x;
+    float half_width = 0.5 * final_height_width_angle.y;
 
     vec3 horizontal_dir = half_width * right_dir * -sign(dot(view_a, right_dir));
     vec3 vertical_dir = half_height * up_dir * -sign(dot(view_a, up_dir));
@@ -117,14 +117,12 @@ void main() {
 
     if (vertex_id == 2 || vertex_id == 7) {
         float line_dir_sign = id_final == id_a ? -1.0 : 1.0;
-        pos = segment_pos + line_dir_sign * line_dir * close_height_width_angle.y * 0.5 * sin(close_height_width_angle.z * 0.5);
-        pos += right_dir * close_height_width_angle.y * 0.5 * cos(close_height_width_angle.z * 0.5);
+        pos = segment_pos + line_dir_sign * line_dir * final_height_width_angle.y * 0.5 * sin(final_height_width_angle.z * 0.5);
+        pos += right_dir * final_height_width_angle.y * 0.5 * cos(final_height_width_angle.z * 0.5);
     }
 
     //LIGHT
-	vec3 color_base = decode_color(texelFetch(colorsTex, id_final).x);
-    if (vertex_id == 2) color_base = vec3(1.0,0.0,0.0);
-    if (vertex_id == 7) color_base = vec3(0.0,0.0,1.0);
+    vec3 color_base = decode_color(texelFetch(colorsTex, id_final).x);
     vec3 normal = normalize(pos - segment_pos);
 
     vec3 light_top_dir = vec3(-0.4574957, 0.4574957, 0.7624929);
