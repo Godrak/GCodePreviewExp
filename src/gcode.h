@@ -467,6 +467,10 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
         glm::vec3 prev_line       = prev_line_valid ? (path_points[i].position - path_points[i - 1].position) : glm::vec3(0);
 
         bool      this_line_valid = i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position;
+        
+        //THIS disables travel moves completely
+        this_line_valid = !path_points[i].is_travel_move();
+
         glm::vec3 this_line       = this_line_valid ? (path_points[i + 1].position - path_points[i].position) : glm::vec3(0);
 
         if (this_line_valid) {

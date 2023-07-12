@@ -8,6 +8,7 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <pstl/glue_algorithm_defs.h>
 #include <random>
 #if defined(_WIN32)
 #include <windows.h>
