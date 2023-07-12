@@ -297,7 +297,9 @@ void show_config_window()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
     if (ImGui::Checkbox("with_visibility_pass", &config::with_visibility_pass)) {}
-    if (ImGui::Checkbox("force_full_model_render", &config::force_full_model_render)) {}
+    if (ImGui::Checkbox("force_full_model_render", &config::force_full_model_render)) {
+         config::enabled_paths_update_required = true;
+    }
     if (ImGui::Checkbox("view_travel_paths", &config::view_travel_paths)) { config::enabled_paths_update_required = true;}
     if (ImGui::Checkbox("view_perimeters", &config::view_perimeters)) { config::enabled_paths_update_required = true;}
     if (ImGui::Checkbox("view_inner_perimeters", &config::view_inner_perimeters)) { config::enabled_paths_update_required = true;}
@@ -556,6 +558,15 @@ void render(gcode::BufferedPath &path)
         glBufferData(GL_TEXTURE_BUFFER, path.visible_lines.size() * sizeof(uint32_t), path.visible_lines.data(), GL_STREAM_DRAW);
         path.visible_segments_count = path.visible_lines.size();
 
+        if (config::force_full_model_render) {
+            path.visible_lines.clear();
+            path.enabled_lines_bitset.get_enabled_indices(path.visible_lines);
+            glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_buffer);
+            glBufferData(GL_TEXTURE_BUFFER, path.visible_lines.size() * sizeof(uint32_t), path.visible_lines.data(), GL_STREAM_DRAW);
+            path.visible_segments_count = path.visible_lines.size();
+            config::with_visibility_pass = false;
+        }
+
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, gcode::visibilityFramebuffer);
         glBlitFramebuffer(0, 0, globals::screenResolution.x, globals::screenResolution.y, 0, 0, globals::visibilityResolution.x,
@@ -623,7 +634,7 @@ void render(gcode::BufferedPath &path)
             std::cout << "enabled hot lines " << glfwGetTime() << std::endl;
 
             path.visible_lines.clear();
-            path.visible_lines_bitset.getEnabledIndices(path.visible_lines);
+            path.visible_lines_bitset.get_enabled_indices(path.visible_lines);
 
             std::cout << "filtering done " << glfwGetTime() << std::endl;
         });

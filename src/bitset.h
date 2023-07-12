@@ -60,7 +60,22 @@ public:
         return ((blocks[block_idx] >> bit_idx) & 1) != 0;
     }
 
-    template<typename U> void getEnabledIndices(std::vector<U> &dest) const
+    template<typename D, typename U = T>
+    inline typename std::enable_if<!is_atomic<U>, void>::type get_enabled_indices(std::vector<D> &dest) const
+    {
+        for (unsigned int block_idx = 0; block_idx < blocks.size(); ++block_idx) {
+            T block = blocks[block_idx];
+            while (block != 0) {
+                unsigned int bit_idx = __builtin_ctzll(block); // Find the index of the least significant bit
+                unsigned int index   = block_idx * (sizeof(T) * 8) + bit_idx;
+                dest.push_back(index);
+                block &= (block - 1); // Clear the least significant bit
+            }
+        }
+    }
+
+    template<typename D, typename U = T>
+    inline typename std::enable_if<is_atomic<U>, void>::type get_enabled_indices(std::vector<D> &dest) const
     {
         for (unsigned int block_idx = 0; block_idx < blocks.size(); ++block_idx) {
             T block = blocks[block_idx].load();
