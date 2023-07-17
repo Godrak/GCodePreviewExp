@@ -3,7 +3,9 @@
 // If you are new to Dear ImGui, read documentation from the docs/ folder + read the top of imgui.cpp.
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
+#include "glm/common.hpp"
 #include "glm/fwd.hpp"
+#include "glm/geometric.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <iterator>
@@ -444,6 +446,10 @@ public:
         glfwContext::camera.target =  0.5f * (m_min + m_max);
         glfwContext::camera.position = m_max;
     }
+
+    glm::vec3 get_size() {
+        return glm::abs(m_max - m_min);
+    }
 };
 
 SceneBox scene_box;
@@ -518,8 +524,7 @@ static size_t hope_unique(uint32_t *out, size_t len) {
 
 FilteringWorker                                   filtering_worker{};
 std::vector<GLuint>                               visibility_pixels_data;
-std::random_device                                random_device;
-std::mt19937                                      random_generator(random_device());
+Camera camera_snapshot = glfwContext::camera;
 
 void switchConfiguration()
 {
@@ -611,23 +616,34 @@ void render(gcode::BufferedPath &path)
         path.filtering_work = filtering_worker.enqueue([&path]() {
             std::cout << "Filtering starts " << glfwGetTime() << std::endl;
 
-            unsigned int fps = (unsigned int) ImGui::GetCurrentContext()->IO.Framerate;
-            std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(), [fps, &path](GLuint box_id) {
-                path.visible_boxes_heat[box_id] = fps + fps * (rand() / float(RAND_MAX));
+            size_t max_heat = size_t(glm::length(scene_box.get_size()) / config::voxel_size);
+            float  cam_movement = glm::length(glfwContext::camera.position - camera_snapshot.position) +
+                                 glm::length(glfwContext::camera.target - camera_snapshot.target);
+
+            camera_snapshot = glfwContext::camera;
+            int fps = (int) ImGui::GetCurrentContext()->IO.Framerate;
+            int fps_lack = std::max(0, 20 - fps);
+            float max_cam_distance = 100.0f;
+            cam_movement *= (10.0f * fps_lack / 20.0);
+            int heatloss = std::min(cam_movement, max_cam_distance) / max_cam_distance * 0.9f * max_heat;
+            int init_heat = max_heat - heatloss;
+
+            std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(), [init_heat, &path](GLuint box_id) {
+                path.visible_boxes_heat[box_id] = init_heat;
             });
 
             std::cout << "heat assigned " << glfwGetTime() << std::endl;
 
             path.visible_lines_bitset.clear();
 
-            std::for_each(std::execution::par_unseq, path.visible_boxes_heat.begin(), path.visible_boxes_heat.end(), [&path](GLint &heat) {
+            std::for_each(std::execution::par_unseq, path.visible_boxes_heat.begin(), path.visible_boxes_heat.end(), [heatloss, &path](GLint &heat) {
                 if (heat > 0) {
                     size_t box_id = std::distance(&path.visible_boxes_heat[0], &heat);
                     for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
                         path.visible_lines_bitset.set_atomic(line_idx);
                     }
                 }
-                heat--;
+                heat-=heatloss;
             });
 
             path.visible_lines_bitset &= path.enabled_lines_bitset;

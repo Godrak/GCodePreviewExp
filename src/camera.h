@@ -21,13 +21,6 @@ struct Camera
     float     rotationSpeed = 2;
     float     zoomSpeed     = 4;
 
-    std::vector<glm::vec3> movement_history{};
-    std::vector<glm::vec2> rotation_history{};
-
-    void clear_history() {
-        movement_history.clear();
-        rotation_history.clear();
-    }
 
 	glm::mat4x4 get_view_projection() const {
 		 auto view =  glm::lookAtRH(position, target, up);
@@ -37,23 +30,9 @@ struct Camera
 		return perspective * view;
 	}
 
-    std::pair<glm::mat4x4, glm::vec3> predict_view_projection_and_position() const
-    {
-        Camera predicted_camera = *this;
-        for (size_t i = 0; i < config::camera_prediction_frames; i++) {
-            for (glm::vec3 move : movement_history)
-                predicted_camera.moveCamera(move);
-            for (glm::vec2 offset : rotation_history)
-                predicted_camera.rotateCamera(offset);
-        }
-
-        return {predicted_camera.get_view_projection(), predicted_camera.position};
-    }
-
     void moveCamera(glm::vec3 movements_vector)
     {
         glm::vec3 direction = glm::normalize(target - position);
-        movement_history.push_back(movements_vector);
         position += movements_vector.x * direction * stepSize;
         position += movements_vector.y * glm::normalize(glm::cross(direction, up)) * stepSize;
         position += movements_vector.z * glm::normalize(up) * stepSize;
@@ -67,7 +46,6 @@ struct Camera
 
     void rotateCamera(glm::vec2 offset)
     {
-        rotation_history.push_back(offset);
         glm::vec3 direction = glm::normalize(target - position);
         auto      step      = glm::normalize(glm::cross(direction, up));
         step *= offset[0];

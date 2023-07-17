@@ -39,7 +39,7 @@ bool enabled_paths_update_required = true;
 size_t camera_prediction_frames = 4;
 size_t visiblity_multiframes_count = 10;
 
-float voxel_size = 5;
+float voxel_size = 2;
 }
 
 class SequentialRange
