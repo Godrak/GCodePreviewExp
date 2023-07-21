@@ -560,6 +560,7 @@ void render(gcode::BufferedPath &path)
         
         std::cout << "VISIBLITY RENDERING PASS STARTS: " << glfwGetTime() << std::endl;
 
+        // Buffer previously computed visible lines
         glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_buffer);
         glBufferData(GL_TEXTURE_BUFFER, path.visible_lines.size() * sizeof(uint32_t), path.visible_lines.data(), GL_STREAM_DRAW);
         path.visible_segments_count = path.visible_lines.size();
@@ -573,6 +574,7 @@ void render(gcode::BufferedPath &path)
             config::with_visibility_pass = false;
         }
 
+        // Prepare for rendering of the batch of voxels that should be checked for visibility
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, gcode::visibilityFramebuffer);
         glBlitFramebuffer(0, 0, globals::screenResolution.x, globals::screenResolution.y, 0, 0, globals::visibilityResolution.x,
@@ -607,44 +609,47 @@ void render(gcode::BufferedPath &path)
         auto view_projection = glfwContext::camera.get_view_projection();
         glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
 
+        // render visible voxels
         glDrawElements(GL_TRIANGLES, path.index_buffer_size, GL_UNSIGNED_INT, 0);
 
+        // read the rendered image for processing
         visibility_pixels_data.resize(globals::visibilityResolution.x * globals::visibilityResolution.y);
         glReadPixels(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT,
                      visibility_pixels_data.data());
 
+        // Asynchornously perform filter and update the visible lines accordingly
         path.filtering_work = filtering_worker.enqueue([&path]() {
             std::cout << "Filtering starts " << glfwGetTime() << std::endl;
 
-            size_t max_heat = size_t(glm::length(scene_box.get_size()) / config::voxel_size);
-            float  cam_movement = glm::length(glfwContext::camera.position - camera_snapshot.position) +
+            // estimate fps loses, camera movement and derive heat adjustments
+            size_t init_heat = size_t(glm::length(scene_box.get_size()) / config::voxel_size);
+            int    heatloss  = 0;
+
+            float cam_movement = glm::length(glfwContext::camera.position - camera_snapshot.position) +
                                  glm::length(glfwContext::camera.target - camera_snapshot.target);
-
             camera_snapshot = glfwContext::camera;
-            int fps = (int) ImGui::GetCurrentContext()->IO.Framerate;
-            int fps_lack = std::max(0, 20 - fps);
-            float max_cam_distance = 100.0f;
-            cam_movement *= (10.0f * fps_lack / 20.0);
-            int heatloss = std::min(cam_movement, max_cam_distance) / max_cam_distance * 0.9f * max_heat;
-            int init_heat = max_heat - heatloss;
+            int fps         = (int) ImGui::GetCurrentContext()->IO.Framerate;
+            if (cam_movement > 0 && fps < 20) {
+                heatloss += init_heat * 0.1 * (20 - fps) / 20.0;
+            }
 
-            std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(), [init_heat, &path](GLuint box_id) {
-                path.visible_boxes_heat[box_id] = init_heat;
-            });
+            std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(),
+                          [init_heat, &path](GLuint box_id) { path.visible_boxes_heat[box_id] = init_heat; });
 
             std::cout << "heat assigned " << glfwGetTime() << std::endl;
 
             path.visible_lines_bitset.clear();
 
-            std::for_each(std::execution::par_unseq, path.visible_boxes_heat.begin(), path.visible_boxes_heat.end(), [heatloss, &path](GLint &heat) {
-                if (heat > 0) {
-                    size_t box_id = std::distance(&path.visible_boxes_heat[0], &heat);
-                    for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
-                        path.visible_lines_bitset.set_atomic(line_idx);
-                    }
-                }
-                heat-=heatloss;
-            });
+            std::for_each(std::execution::par_unseq, path.visible_boxes_heat.begin(), path.visible_boxes_heat.end(),
+                          [heatloss, &path](GLint &heat) {
+                              if (heat > 0) {
+                                  size_t box_id = std::distance(&path.visible_boxes_heat[0], &heat);
+                                  for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
+                                      path.visible_lines_bitset.set_atomic(line_idx);
+                                  }
+                                  heat -= heatloss;
+                              }
+                          });
 
             path.visible_lines_bitset &= path.enabled_lines_bitset;
 
