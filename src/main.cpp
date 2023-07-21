@@ -645,7 +645,9 @@ void render(gcode::BufferedPath &path)
                               if (heat > 0) {
                                   size_t box_id = std::distance(&path.visible_boxes_heat[0], &heat);
                                   for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
-                                      path.visible_lines_bitset.set_atomic(line_idx);
+                                      if (line_idx >= sequential_range.get_current_min() && line_idx <= sequential_range.get_current_max()) {
+                                          path.visible_lines_bitset.set_atomic(line_idx);
+                                      }
                                   }
                                   heat -= heatloss;
                               }
