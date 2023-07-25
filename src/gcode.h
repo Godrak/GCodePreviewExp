@@ -521,7 +521,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
             }
         }
 
-        result.visible_boxes_heat          = std::vector<GLint>(result.visibility_boxes_with_segments.size());
+        result.visible_boxes_heat          = std::vector<GLint>(result.visibility_boxes_with_segments.size(), 1);
         result.visible_boxes_indices_distr = std::uniform_int_distribution<size_t>{0, result.visibility_boxes_with_segments.size() - 1};
 
         glGenVertexArrays(1, &result.visibility_VAO);
