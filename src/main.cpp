@@ -29,19 +29,8 @@
 
 #include <GLFW/glfw3.h>
 
-#if __APPLE__
-#include <oneapi/dpl/algorithm>
-#include <oneapi/dpl/execution>
-#else
-#include <execution>
-#include <algorithm>
-#endif
-
 #include <chrono>
-#include <future>
-#include <mutex>
 #include <stdio.h>
-#include <thread>
 #include <vector>
 #include <queue>
 #include <fstream>
@@ -100,11 +89,6 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
             config::vsync = 1 - config::vsync;
             std::cout << "vsync: " << config::vsync << std::endl;
             glfwSwapInterval(config::vsync);
-            break;
-        }
-        case GLFW_KEY_F4: {
-            config::with_visibility_pass = 1 - config::with_visibility_pass;
-            std::cout << "with_visibility_pass: " << config::with_visibility_pass << std::endl;
             break;
         }
         case GLFW_KEY_W: {
@@ -299,7 +283,6 @@ void show_config_window()
     ImGui::SetNextWindowBgAlpha(0.25f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
-    if (ImGui::Checkbox("with_visibility_pass", &config::with_visibility_pass)) {}
     if (ImGui::Checkbox("force_full_model_render", &config::force_full_model_render)) {
          config::enabled_paths_update_required = true;
     }
@@ -404,6 +387,7 @@ void show_sequential_sliders()
     int low = (int)sequential_range.get_current_min();
     if (ImGui::SliderInt("##slider_low", &low, global_min, global_max, "%d", ImGuiSliderFlags_NoInput)) {
         sequential_range.set_current_min((size_t)low);
+        config::enabled_paths_update_required = true;
     }
     ImGui::SameLine();
     ImGui::Text("%d", global_max);
@@ -414,6 +398,7 @@ void show_sequential_sliders()
     int high = (int)sequential_range.get_current_max();
     if (ImGui::SliderInt("##slider_high", &high, global_min, global_max, "%d", ImGuiSliderFlags_NoInput)) {
         sequential_range.set_current_max((size_t)high);
+        config::enabled_paths_update_required = true;
     }
     ImGui::SameLine();
     ImGui::Text("%d", global_max);
@@ -454,61 +439,6 @@ public:
 
 SceneBox scene_box;
 
-class FilteringWorker
-{
-public:
-    FilteringWorker() : stopFlag(false) { workerThread = std::thread(&FilteringWorker::workerThreadFunction, this); }
-
-    template<typename Callable> auto enqueue(Callable &&callable) -> std::future<void>
-    {
-        auto              task      = std::make_shared<std::packaged_task<void()>>(std::forward<Callable>(callable));
-        std::future<void> futureObj = task->get_future();
-
-        {
-            std::lock_guard<std::mutex> lock(queueMutex);
-            taskQueue.emplace([task]() { (*task)(); });
-        }
-
-        return futureObj;
-    }
-
-    void stop()
-    {
-        {
-            std::lock_guard<std::mutex> lock(queueMutex);
-            stopFlag = true;
-        }
-
-        workerThread.join();
-    }
-
-private:
-    std::queue<std::function<void()>> taskQueue;
-    std::mutex                        queueMutex;
-    std::thread                       workerThread;
-    bool                              stopFlag;
-
-    void workerThreadFunction()
-    {
-        while (true) {
-            if (stopFlag) {
-                return;
-            }
-            std::function<void()> task;
-            if (!taskQueue.empty()) {
-                std::lock_guard<std::mutex> lock(queueMutex);
-                task = std::move(taskQueue.front());
-                taskQueue.pop();
-            } else {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                continue;
-            }
-
-            task();
-        }
-    }
-};
-
 static size_t hope_unique(uint32_t *out, size_t len) {
     if(len ==  0) return 0; // duh!
     size_t pos = 1;
@@ -522,8 +452,6 @@ static size_t hope_unique(uint32_t *out, size_t len) {
     return pos;
 }
 
-FilteringWorker                                   filtering_worker{};
-std::vector<GLuint>                               visibility_pixels_data;
 Camera camera_snapshot = glfwContext::camera;
 
 void switchConfiguration()
@@ -550,121 +478,9 @@ void render(gcode::BufferedPath &path)
     glfwGetFramebufferSize(glfwContext::window, &new_size.x, &new_size.y);
     checkGl();
     if (new_size != globals::screenResolution) {
-        globals::screenResolution = new_size;
-        globals::visibilityResolution = globals::screenResolution / 4;
-        gcode::recreateVisibilityBufferOnResolutionChange();
+        globals::screenResolution     = new_size;
     }
 
-    if (config::with_visibility_pass &&
-        (!path.filtering_work.valid() || path.filtering_work.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready)) {
-        
-        std::cout << "VISIBLITY RENDERING PASS STARTS: " << glfwGetTime() << std::endl;
-
-        // Buffer previously computed visible lines
-        glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_buffer);
-        glBufferData(GL_TEXTURE_BUFFER, path.visible_lines.size() * sizeof(uint32_t), path.visible_lines.data(), GL_STREAM_DRAW);
-        path.visible_segments_count = path.visible_lines.size();
-
-        if (config::force_full_model_render) {
-            path.visible_lines.clear();
-            path.enabled_lines_bitset.get_enabled_indices(path.visible_lines);
-            glBindBuffer(GL_TEXTURE_BUFFER, path.visible_segments_buffer);
-            glBufferData(GL_TEXTURE_BUFFER, path.visible_lines.size() * sizeof(uint32_t), path.visible_lines.data(), GL_STREAM_DRAW);
-            path.visible_segments_count = path.visible_lines.size();
-            config::with_visibility_pass = false;
-        }
-
-        // Prepare for rendering of the batch of voxels that should be checked for visibility
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, gcode::visibilityFramebuffer);
-        glBlitFramebuffer(0, 0, globals::screenResolution.x, globals::screenResolution.y, 0, 0, globals::visibilityResolution.x,
-                          globals::visibilityResolution.y, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, gcode::visibilityFramebuffer);
-        checkGl();
-        glEnable(GL_DEPTH_TEST);
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        checkGl();
-        glViewport(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y);
-        checkGl();
-
-        glBindBuffer(GL_TEXTURE_BUFFER, path.visible_boxes_buffer);
-        glBufferData(GL_TEXTURE_BUFFER, path.visible_boxes_heat.size() * sizeof(GLint), path.visible_boxes_heat.data(),
-                     GL_STREAM_DRAW);
-
-        glUseProgram(shaderProgram::visibility_program);
-        glBindVertexArray(path.visibility_VAO);
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_BUFFER, path.visible_boxes_texture);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32I, path.visible_boxes_buffer);
-
-        const int visible_boxes_tex_id = ::glGetUniformLocation(shaderProgram::visibility_program, "visible_boxes_heat");
-        assert(visible_boxes_tex_id >= 0);
-        glUniform1i(visible_boxes_tex_id, 0);
-
-        const int vp_id = ::glGetUniformLocation(shaderProgram::visibility_program, "view_projection");
-        assert(vp_id >= 0);
-        auto view_projection = glfwContext::camera.get_view_projection();
-        glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
-
-        // render visible voxels
-        glDrawElements(GL_TRIANGLES, path.index_buffer_size, GL_UNSIGNED_INT, 0);
-
-        // read the rendered image for processing
-        visibility_pixels_data.resize(globals::visibilityResolution.x * globals::visibilityResolution.y);
-        glReadPixels(0, 0, globals::visibilityResolution.x, globals::visibilityResolution.y, GL_RED_INTEGER, GL_UNSIGNED_INT,
-                     visibility_pixels_data.data());
-
-        // Asynchornously perform filter and update the visible lines accordingly
-        path.filtering_work = filtering_worker.enqueue([&path]() {
-            std::cout << "Filtering starts " << glfwGetTime() << std::endl;
-
-            // estimate fps loses, camera movement and derive heat adjustments
-            size_t init_heat = size_t(glm::length(scene_box.get_size()) / config::voxel_size);
-            int    heatloss  = 0;
-
-            float cam_movement = glm::length(glfwContext::camera.position - camera_snapshot.position) +
-                                 glm::length(glfwContext::camera.target - camera_snapshot.target);
-            camera_snapshot = glfwContext::camera;
-            int fps         = (int) ImGui::GetCurrentContext()->IO.Framerate;
-            if (cam_movement > 0 && fps < 20) {
-                heatloss += init_heat * 0.1 * (20 - fps) / 20.0;
-            }
-
-            std::for_each(std::execution::par_unseq, visibility_pixels_data.begin(), visibility_pixels_data.end(),
-                          [init_heat, &path](GLuint box_id) { path.visible_boxes_heat[box_id] = init_heat; });
-
-            std::cout << "heat assigned " << glfwGetTime() << std::endl;
-
-            path.visible_lines_bitset.clear();
-
-            std::for_each(std::execution::par_unseq, path.visible_boxes_heat.begin(), path.visible_boxes_heat.end(),
-                          [heatloss, &path](GLint &heat) {
-                              if (heat > 0) {
-                                  size_t box_id = std::distance(&path.visible_boxes_heat[0], &heat);
-                                  for (size_t line_idx : path.visibility_boxes_with_segments[box_id].second) {
-                                      if (line_idx >= sequential_range.get_current_min() && line_idx <= sequential_range.get_current_max()) {
-                                          path.visible_lines_bitset.set_atomic(line_idx);
-                                      }
-                                  }
-                                  heat -= heatloss;
-                              }
-                          });
-
-            path.visible_lines_bitset &= path.enabled_lines_bitset;
-
-            std::cout << "enabled hot lines " << glfwGetTime() << std::endl;
-
-            path.visible_lines.clear();
-            path.visible_lines_bitset.get_enabled_indices(path.visible_lines);
-
-            std::cout << "filtering done " << glfwGetTime() << std::endl;
-        });
-    }
-
-    // Now render only the visible lines, with the expensive frag shader
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     checkGl();
     glEnable(GL_DEPTH_TEST);
@@ -706,8 +522,8 @@ void render(gcode::BufferedPath &path)
     glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, path.color_buffer);
 
     glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_BUFFER, path.visible_segments_texture);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.visible_segments_buffer);
+    glBindTexture(GL_TEXTURE_BUFFER, path.enabled_lines_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_lines_buffer);
 
     const int vp_id = ::glGetUniformLocation(shaderProgram::gcode_program, "view_projection");
     assert(vp_id >= 0);
@@ -720,8 +536,8 @@ void render(gcode::BufferedPath &path)
     glUniform3fv(camera_position_id, 1, glm::value_ptr(camera_position));
     checkGl();
 
-    if (path.visible_segments_count > 0)
-        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, path.visible_segments_count);
+    if (path.enabled_lines_count > 0)
+        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, path.enabled_lines_count);
     checkGl();
 
     glUseProgram(0);
@@ -731,7 +547,6 @@ void render(gcode::BufferedPath &path)
 void setup()
 {
     shaderProgram::createGCodeProgram();
-    shaderProgram::createVisibilityProgram();
     gcode::init();
     checkGl();
 }
@@ -910,7 +725,6 @@ int main(int argc, char *argv[])
 #endif
 
     // Cleanup
-    rendering::filtering_worker.stop();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

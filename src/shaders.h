@@ -77,20 +77,6 @@ void createGCodeProgram() {
 		exit(-1);
 }
 
-void createVisibilityProgram() {
-	loadAndCompileShader(shaders_path + "gcode_shaders/visibility_v_shader.glsl", visibility_v_shader,
-	GL_VERTEX_SHADER);
-	loadAndCompileShader(shaders_path + "gcode_shaders/visibility_f_shader.glsl", visibility_f_shader,
-		GL_FRAGMENT_SHADER);
-
-	visibility_program = glCreateProgram();
-	glAttachShader(visibility_program, visibility_v_shader);
-	glAttachShader(visibility_program, visibility_f_shader);
-	glLinkProgram(visibility_program);
-	if (!check_program(visibility_program, GL_LINK_STATUS))
-		exit(-1);
-}
-
 }
 
 #endif /* SHADERS_H_ */

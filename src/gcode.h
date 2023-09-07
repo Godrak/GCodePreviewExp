@@ -1,10 +1,7 @@
 #ifndef GCODE_H_
 #define GCODE_H_
 
-#include <atomic>
-#include <future>
 #include <glm/fwd.hpp>
-
 #include "bitset.h"
 #include "glad/glad.h"
 #include "glm/geometric.hpp"
@@ -28,8 +25,6 @@ static unsigned int extract_role_from_flags(unsigned int flags) { return flags &
 static unsigned int extract_type_from_flags(unsigned int flags) { return (flags >> 8) & 0xFF; }
 
 GLuint gcodeVAO, vertexBuffer;
-GLuint visibilityFramebuffer, instanceIdsTexture, depthTexture;
-GLuint quadVAO;
 
 GLuint pathSSBObindPoint = 5;
 
@@ -51,45 +46,6 @@ int vertex_data[] = {
         5, 4, 7, // back spike
         5, 7, 6, // back spike
         };
-
-glm::vec3 unit_box_vertices[] = {
-    // Front face
-    glm::ivec3(0, 0, 1), // Bottom-left
-    glm::ivec3(1, 0, 1), // Bottom-right
-    glm::ivec3(1, 1, 1), // Top-right
-    glm::ivec3(0, 1, 1), // Top-left
-    //back face
-    glm::ivec3(0, 0, 0), // Bottom-left
-    glm::ivec3(1, 0, 0), // Bottom-right
-    glm::ivec3(1, 1, 0), // Top-right
-    glm::ivec3(0, 1, 0)  // Top-left
-};
-
-GLuint unit_box_indices[] = {
-    // Front face
-    0, 1, 2,  // First triangle
-    2, 3, 0,  // Second triangle
-
-    // Right face
-    1, 5, 6,  // First triangle
-    6, 2, 1,  // Second triangle
-
-    // Back face
-    7, 6, 5,  // First triangle
-    5, 4, 7,  // Second triangle
-
-    // Left face
-    4, 0, 3,  // First triangle
-    3, 7, 4,  // Second triangle
-
-    // Bottom face
-    4, 5, 1,  // First triangle
-    1, 0, 4,  // Second triangle
-
-    // Top face
-    3, 2, 6,  // First triangle
-    6, 7, 3   // Second triangle
-};
 
 struct PathPoint
 {
@@ -247,26 +203,16 @@ struct BufferedPath
     GLuint                             positions_texture, positions_buffer;
     GLuint                             height_width_angle_texture, height_width_angle_buffer;
     GLuint                             color_texture, color_buffer;
-    GLuint                             visible_segments_texture, visible_segments_buffer;
-    size_t                             visible_segments_count;
+    GLuint                             enabled_lines_texture, enabled_lines_buffer;
+    size_t                             enabled_lines_count;
     size_t                             total_points_count;
     bitset::BitSet<>                   valid_lines_bitset;
-    bitset::BitSet<>                   enabled_lines_bitset;
-    bitset::BitSet<std::atomic_size_t> visible_lines_bitset;
-    std::vector<uint32_t>              visible_lines;
-
-    std::future<void> filtering_work{};
-    GLuint            visibility_VAO;
-    GLuint            visibility_boxes_vertex_buffer, visibility_boxes_index_buffer, visible_boxes_texture, visible_boxes_buffer;
-    size_t            index_buffer_size;
-    std::vector<std::pair<glm::ivec3, std::vector<uint32_t>>> visibility_boxes_with_segments;
-    std::vector<GLint>                                        visible_boxes_heat;
-    std::uniform_int_distribution<size_t>                     visible_boxes_indices_distr;
 };
 
 void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_points) {
-    path.enabled_lines_bitset = path.valid_lines_bitset;
-    for (size_t i = 0; i < path_points.size(); i++) {
+    std::vector<glm::uint32_t> enabled_lines{};
+    enabled_lines.reserve(path.enabled_lines_count);
+    for (glm::uint32_t i = sequential_range.get_current_min(); i < sequential_range.get_current_max(); i++) {
 //   { 0.90f, 0.70f, 0.70f },   // None
 //     { 1.00f, 0.90f, 0.30f },   // Perimeter
 //     { 1.00f, 0.49f, 0.22f },   // ExternalPerimeter
@@ -287,13 +233,23 @@ void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_p
         bool is_travel = path_points[i].is_travel_move();
         const unsigned int role = path_points[i].role_from_flags();
 
-        if (!config::view_travel_paths && is_travel) path.enabled_lines_bitset.reset(i);
-        if (!config::view_perimeters && (role == 2)) path.enabled_lines_bitset.reset(i);
-        if (!config::view_inner_perimeters && (role == 1 || role == 3)) path.enabled_lines_bitset.reset(i);
-        if (!config::view_internal_infill && (role == 4)) path.enabled_lines_bitset.reset(i);
-        if (!config::view_solid_infills && (role == 5 || role == 6 || role == 8)) path.enabled_lines_bitset.reset(i);
-        if (!config::view_supports && (role == 11 || role == 12)) path.enabled_lines_bitset.reset(i);
+        if (!path.valid_lines_bitset[i]) continue;
+
+        if (!config::view_travel_paths && is_travel) continue;
+        if (!config::view_perimeters && (role == 2)) continue;
+        if (!config::view_inner_perimeters && (role == 1 || role == 3))continue;
+        if (!config::view_internal_infill && (role == 4)) continue;
+        if (!config::view_solid_infills && (role == 5 || role == 6 || role == 8)) continue;
+        if (!config::view_supports && (role == 11 || role == 12)) continue;
+
+        enabled_lines.push_back(i);
     }
+
+    glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_lines_buffer);
+    // buffer data to the buffer
+    glBufferData(GL_TEXTURE_BUFFER, enabled_lines.size() * sizeof(glm::uint32_t), enabled_lines.data(), GL_STATIC_DRAW);
+    path.enabled_lines_count = enabled_lines.size();
+
 }
 
 void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &path_points)
@@ -373,78 +329,6 @@ void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &pa
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
 }
 
-std::vector<glm::ivec3> get_covered_voxels(const glm::vec3 &ray_start, const glm::vec3 &ray_end)
-{
-    std::vector<glm::ivec3> visited_voxels;
-
-    glm::ivec3 current_voxel(std::floor(ray_start.x / config::voxel_size), std::floor(ray_start.y / config::voxel_size),
-                             std::floor(ray_start.z / config::voxel_size));
-
-    glm::ivec3 last_voxel(std::floor(ray_end.x / config::voxel_size), std::floor(ray_end.y / config::voxel_size),
-                          std::floor(ray_end.z / config::voxel_size));
-
-    glm::dvec3 ray = ray_end - ray_start;
-
-    double stepX = (ray.x >= 0) ? 1 : -1;
-    double stepY = (ray.y >= 0) ? 1 : -1;
-    double stepZ = (ray.z >= 0) ? 1 : -1;
-
-    double next_voxel_boundary_x = (current_voxel.x + stepX) * config::voxel_size;
-    double next_voxel_boundary_y = (current_voxel.y + stepY) * config::voxel_size;
-    double next_voxel_boundary_z = (current_voxel.z + stepZ) * config::voxel_size;
-
-    double tMaxX = (ray.x != 0) ? (next_voxel_boundary_x - ray_start.x) / ray.x : DBL_MAX;
-    double tMaxY = (ray.y != 0) ? (next_voxel_boundary_y - ray_start.y) / ray.y : DBL_MAX;
-    double tMaxZ = (ray.z != 0) ? (next_voxel_boundary_z - ray_start.z) / ray.z : DBL_MAX;
-
-    double tDeltaX = (ray.x != 0) ? config::voxel_size / ray.x * stepX : DBL_MAX;
-    double tDeltaY = (ray.y != 0) ? config::voxel_size / ray.y * stepY : DBL_MAX;
-    double tDeltaZ = (ray.z != 0) ? config::voxel_size / ray.z * stepZ : DBL_MAX;
-
-    glm::ivec3 diff(0, 0, 0);
-    bool       neg_ray = false;
-    if (current_voxel.x != last_voxel.x && ray.x < 0) {
-        diff.x--;
-        neg_ray = true;
-    }
-    if (current_voxel.y != last_voxel.y && ray.y < 0) {
-        diff.y--;
-        neg_ray = true;
-    }
-    if (current_voxel.z != last_voxel.z && ray.z < 0) {
-        diff.z--;
-        neg_ray = true;
-    }
-    visited_voxels.push_back(current_voxel);
-    if (neg_ray) {
-        current_voxel += diff;
-        visited_voxels.push_back(current_voxel);
-    }
-
-    while (last_voxel != current_voxel) {
-        if (tMaxX < tMaxY) {
-            if (tMaxX < tMaxZ) {
-                current_voxel.x += stepX;
-                tMaxX += tDeltaX;
-            } else {
-                current_voxel.z += stepZ;
-                tMaxZ += tDeltaZ;
-            }
-        } else {
-            if (tMaxY < tMaxZ) {
-                current_voxel.y += stepY;
-                tMaxY += tDeltaY;
-            } else {
-                current_voxel.z += stepZ;
-                tMaxZ += tDeltaZ;
-            }
-        }
-        visited_voxels.push_back(current_voxel);
-    }
-
-    return visited_voxels;
-}
-
 BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     BufferedPath result;
 
@@ -453,14 +337,6 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
     result.valid_lines_bitset = bitset::BitSet<>(path_points.size());
     result.valid_lines_bitset.setAll();
-    result.visible_lines_bitset = bitset::BitSet<std::atomic_size_t>(path_points.size());
-    result.visible_lines_bitset.clear();
-
-    std::unordered_map<glm::ivec3, std::unordered_set<size_t>> visibility_boxes;
-
-    // fill first position with empty box. This is to ensure that we can use 0 as clear value for visilibty framebuffer
-    glm::ivec3 max_coords{std::numeric_limits<int>::min(), std::numeric_limits<int>::min(), std::numeric_limits<int>::min()};
-    visibility_boxes[max_coords] = {};
 
     for (size_t i = 0; i < path_points.size(); i++) {
         bool      prev_line_valid = i > 0 && result.valid_lines_bitset[i - 1];
@@ -468,17 +344,10 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
         bool      this_line_valid = i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position;
         
-        //THIS disables travel moves completely
-        this_line_valid = !path_points[i].is_travel_move();
-
         glm::vec3 this_line       = this_line_valid ? (path_points[i + 1].position - path_points[i].position) : glm::vec3(0);
 
         if (this_line_valid) {
             // there is a valid path between point i and i+1.
-            auto covered = get_covered_voxels(path_points[i].position, path_points[i + 1].position);
-            for (const auto &coords : covered) {
-                visibility_boxes[coords].insert(i);
-            }
         } else {
             // the connection is invalid, there should be no line rendered, ever
             result.valid_lines_bitset.reset(i);
@@ -495,61 +364,6 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     }
 
     result.total_points_count = path_points.size();
-
-    // VISIBILITY BOXES DATA
-    {
-          // fill first position with empty box. This is to ensure that we can use 0 as clear value for visilibty framebuffer
-        result.visibility_boxes_with_segments.push_back({max_coords, {}});
-        for (const auto &pair : visibility_boxes) {
-            if (pair.first != max_coords) {
-                result.visibility_boxes_with_segments.push_back({pair.first, {pair.second.begin(), pair.second.end()}});
-            }
-        };
-
-        std::vector<glm::vec4> boxes_positions_w_ids;
-        std::vector<GLuint>    boxes_indices;
-
-        for (size_t box_index = 0; box_index < result.visibility_boxes_with_segments.size(); box_index++) {
-            size_t     indices_offset = boxes_positions_w_ids.size();
-            glm::ivec3 coords         = result.visibility_boxes_with_segments[box_index].first;
-            for (glm::ivec3 coord_offset : unit_box_vertices) {
-                glm::vec3 final_pos = glm::vec3(coords + coord_offset) * config::voxel_size;
-                boxes_positions_w_ids.push_back({final_pos.x, final_pos.y, final_pos.z, box_index});
-            }
-            for (GLuint index : unit_box_indices) {
-                boxes_indices.push_back(indices_offset + index);
-            }
-        }
-
-        result.visible_boxes_heat          = std::vector<GLint>(result.visibility_boxes_with_segments.size(), 1);
-        result.visible_boxes_indices_distr = std::uniform_int_distribution<size_t>{0, result.visibility_boxes_with_segments.size() - 1};
-
-        glGenVertexArrays(1, &result.visibility_VAO);
-        glBindVertexArray(result.visibility_VAO);
-
-        glGenBuffers(1, &result.visibility_boxes_vertex_buffer);
-        glBindBuffer(GL_ARRAY_BUFFER, result.visibility_boxes_vertex_buffer);
-        glBufferData(GL_ARRAY_BUFFER, boxes_positions_w_ids.size() * sizeof(glm::vec4), boxes_positions_w_ids.data(), GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void *) 0);
-
-        glGenBuffers(1, &result.visibility_boxes_index_buffer);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, result.visibility_boxes_index_buffer);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, boxes_indices.size() * sizeof(GLuint), boxes_indices.data(), GL_STATIC_DRAW);
-
-        result.index_buffer_size = boxes_indices.size();
-
-        // Create a buffer object and bind it to the texture buffer
-        glGenBuffers(1, &result.visible_boxes_buffer);
-        glBindBuffer(GL_TEXTURE_BUFFER, result.visible_boxes_buffer);
-
-        // Create and bind the path texture
-        glGenTextures(1, &result.visible_boxes_texture);
-        glBindTexture(GL_TEXTURE_BUFFER, result.visible_boxes_texture);
-
-        // Attach the buffer object to the texture buffer
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, result.visible_boxes_buffer);
-    }
 
     ///GCODE DATA
     glBindVertexArray(gcodeVAO);
@@ -575,10 +389,10 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glGenBuffers(1, &result.height_width_angle_buffer);
     glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_angle_buffer);
 
-    // buffer data to the path buffer
+    // buffer data to the buffer
     glBufferData(GL_TEXTURE_BUFFER, height_width_angle.size() * sizeof(glm::vec3), height_width_angle.data(), GL_DYNAMIC_DRAW);
 
-    // Create and bind the path texture
+    // Create and bind the texture
     glGenTextures(1, &result.height_width_angle_texture);
     glBindTexture(GL_TEXTURE_BUFFER, result.height_width_angle_texture);
 
@@ -594,7 +408,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glGenBuffers(1, &result.color_buffer);
     glBindBuffer(GL_TEXTURE_BUFFER, result.color_buffer);
 
-    // Create and bind the path texture
+    // Create and bind the texture
     glGenTextures(1, &result.color_texture);
     glBindTexture(GL_TEXTURE_BUFFER, result.color_texture);
 
@@ -605,17 +419,20 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
-    //VISIBLE SEGMENTS BUFFER
-   // Create a buffer object and bind it to the texture buffer
-    glGenBuffers(1, &result.visible_segments_buffer);
-    glBindBuffer(GL_TEXTURE_BUFFER, result.visible_segments_buffer);
+     //ENABLED LINES BUFFER
+    // Create a buffer object and bind it to the texture buffer
+    glGenBuffers(1, &result.enabled_lines_buffer);
+    glBindBuffer(GL_TEXTURE_BUFFER, result.enabled_lines_buffer);
 
-    // Create and bind the path texture
-    glGenTextures(1, &result.visible_segments_texture);
-    glBindTexture(GL_TEXTURE_BUFFER, result.visible_segments_texture);
+    // Create and bind the texture
+    glGenTextures(1, &result.enabled_lines_texture);
+    glBindTexture(GL_TEXTURE_BUFFER, result.enabled_lines_texture);
 
     // Attach the buffer object to the texture buffer
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, result.visible_segments_buffer);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, result.enabled_lines_buffer);
+
+    // buffer enabled lines
+    updateEnabledLines(result, path_points);
 
     // Unbind the buffer object and the texture buffer
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
@@ -647,38 +464,6 @@ BufferedPath generateTestingPathPoints()
    return bufferExtrusionPaths(pathPoints);
 }
 
-void recreateVisibilityBufferOnResolutionChange()
-{
-    // Delete existing textures and framebuffer
-    glDeleteTextures(1, &instanceIdsTexture);
-    glDeleteTextures(1, &depthTexture);
-    glDeleteFramebuffers(1, &visibilityFramebuffer);
-
-    glGenFramebuffers(1, &visibilityFramebuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, visibilityFramebuffer);
-
-    glActiveTexture(GL_TEXTURE1);
-    glGenTextures(1, &instanceIdsTexture);
-    glBindTexture(GL_TEXTURE_2D, instanceIdsTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, globals::visibilityResolution.x, globals::visibilityResolution.y, 0, GL_RED_INTEGER, GL_UNSIGNED_INT,
-                 nullptr);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, instanceIdsTexture, 0);
-
-    checkGl();
-
-    glActiveTexture(GL_TEXTURE2);
-    glGenTextures(1, &depthTexture);
-    glBindTexture(GL_TEXTURE_2D, depthTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, globals::visibilityResolution.x, globals::visibilityResolution.y, 0,
-                 GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
-
-    checkGl();
-    checkGLCall(glCheckFramebufferStatus(visibilityFramebuffer));
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
 void init()
 {
     glGenVertexArrays(1, &gcodeVAO);
@@ -695,19 +480,6 @@ void init()
     glEnableVertexAttribArray(vid_loc);
     glVertexAttribIPointer(vid_loc, 1, GL_INT, sizeof(int), (void *)0);
     checkGl();
-
-    glBindVertexArray(0);
-
-    glGenFramebuffers(1, &visibilityFramebuffer);
-    glGenTextures(1, &instanceIdsTexture);
-  	glGenTextures(1, &depthTexture);
-    recreateVisibilityBufferOnResolutionChange();
-
-    glGenVertexArrays(1, &quadVAO);
-    glBindVertexArray(quadVAO);
-
-    checkGl();
-
     glBindVertexArray(0);
 }
 

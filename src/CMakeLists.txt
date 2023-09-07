@@ -21,8 +21,7 @@ if(WIN)
 		)
 elseif(APPLE)
 	set(WININCL glm glfw/include)
-	find_package (TBB REQUIRED)
-	set(LIBLINK TBB::tbb
+	set(LIBLINK
 		${CMAKE_CURRENT_SOURCE_DIR}/glfw/lib-osx/libglfw3.a 
 		"-framework Cocoa"
 		"-framework IOKit"
@@ -30,8 +29,7 @@ elseif(APPLE)
 	)
 else()
 	set(WININCL glm glfw/include)
-	find_package (TBB REQUIRED)
-	set(LIBLINK glfw TBB::tbb)
+	set(LIBLINK glfw)
 endif()
 
 file(GLOB_RECURSE GLAD_SOURCES "glad/src/glad.c" "glad/*.h")
@@ -44,7 +42,6 @@ target_link_libraries(imgui PUBLIC glad)
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui ${WININCL})
 
 add_definitions(-DUSE_HARDCODED_PATHS="")
-
 
 add_executable(GCdeView main.cpp)
 target_link_libraries(GCdeView PUBLIC glad imgui ${LIBLINK})

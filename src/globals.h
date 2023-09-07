@@ -13,13 +13,11 @@
 
 namespace globals {
 glm::ivec2 screenResolution = {512,512};
-glm::ivec2 visibilityResolution = {512,512};
 }
 
 namespace config {
 bool updateCameraPosition = true;
 bool geometryMode = false;
-bool with_visibility_pass = true;
 bool vsync = true;
 int visualization_type = 0;
 bool ranges_update_required = true;
@@ -36,10 +34,7 @@ bool view_solid_infills = true;
 bool view_supports = true;
 bool enabled_paths_update_required = true;
 
-size_t camera_prediction_frames = 4;
-size_t visiblity_multiframes_count = 10;
 
-float voxel_size = 2;
 }
 
 class SequentialRange
