@@ -27,6 +27,9 @@
     <Filter Include="glad\Source Files">
       <UniqueIdentifier>{e290ab3a-a4d0-4e53-94e6-a090f5cdb7b6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{49f10f36-0270-4539-a527-a68f853bec37}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\imgui\imconfig.h">
@@ -100,5 +103,13 @@
     <ClCompile Include="..\..\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\gcode_shaders\f_shader.glsl">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\..\gcode_shaders\v_shader.glsl">
+      <Filter>shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

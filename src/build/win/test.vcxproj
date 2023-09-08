@@ -208,6 +208,10 @@ xcopy "$(SolutionDir)../../tbb/redist/intel64/vc14/tbb12.dll" "$(OutDir)" /i /e 
     <ClCompile Include="..\..\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\..\main.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\gcode_shaders\f_shader.glsl" />
+    <None Include="..\..\gcode_shaders\v_shader.glsl" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
