@@ -408,6 +408,45 @@ void show_sequential_sliders()
     ImGui::PopStyleVar();
 }
 
+struct Statistics
+{
+  size_t total_moves{ 0 };
+  size_t total_triangles{ 0 };
+};
+
+Statistics statistics;
+
+void show_statistics()
+{
+    int width, height;
+    glfwGetWindowSize(glfwContext::window, &width, &height);
+
+    ImGui::SetNextWindowPos({ 0.0f, 0.5f * (float)height }, ImGuiCond_Always, { 0.0f, 0.5f });
+    ImGui::SetNextWindowBgAlpha(0.25f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("##statistics", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+
+    const ImVec4 label_color(1.0f, 1.0f, 0.0f, 1.0f);
+    const ImVec4 value_color(1.0f, 1.0f, 1.0f, 1.0f);
+
+    if (ImGui::BeginTable("Statistics", 2)) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextColored(label_color, "Moves");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextColored(value_color, "%d", statistics.total_moves);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextColored(label_color, "Triangles");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextColored(value_color, "%d", statistics.total_triangles);
+        ImGui::EndTable();
+    }
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
 namespace rendering {
 
 
@@ -568,11 +607,14 @@ int main(int argc, char *argv[])
     auto points = readPathPoints(filename);
     rendering::scene_box.update(points);
 
+    statistics.total_moves = points.size();
+    statistics.total_triangles = points.size() * gcode::vertex_data_size / 3;
+
     glfwSetErrorCallback(glfwContext::glfw_error_callback);
     if (!glfwInit())
         return 1;
 
-        // Decide GL+GLSL versions
+    // Decide GL+GLSL versions
 #if defined(IMGUI_IMPL_OPENGL_ES2)
     // GL ES 2.0 + GLSL 100
     const char *glsl_version = "#version 100";
@@ -712,6 +754,7 @@ int main(int argc, char *argv[])
         show_opengl();
         show_visualization_type();
         show_sequential_sliders();
+        show_statistics();
 
         rendering::render(path);
 
