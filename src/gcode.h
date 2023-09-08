@@ -204,14 +204,15 @@ struct BufferedPath
     GLuint                             height_width_angle_texture, height_width_angle_buffer;
     GLuint                             color_texture, color_buffer;
     GLuint                             enabled_lines_texture, enabled_lines_buffer;
-    size_t                             enabled_lines_count;
+    size_t                             enabled_lines_count{ 0 };
     size_t                             total_points_count;
     bitset::BitSet<>                   valid_lines_bitset;
 };
 
 void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_points) {
     std::vector<glm::uint32_t> enabled_lines{};
-    enabled_lines.reserve(path.enabled_lines_count);
+    if (path.enabled_lines_count > 0)
+        enabled_lines.reserve(path.enabled_lines_count);
     for (glm::uint32_t i = sequential_range.get_current_min(); i < sequential_range.get_current_max(); i++) {
 //   { 0.90f, 0.70f, 0.70f },   // None
 //     { 1.00f, 0.90f, 0.30f },   // Perimeter
