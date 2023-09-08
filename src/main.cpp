@@ -10,10 +10,11 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
-#include <pstl/glue_algorithm_defs.h>
 #include <random>
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include <pstl/glue_algorithm_defs.h>
 #endif // _WIN32
 
 #include "glad/glad.h"

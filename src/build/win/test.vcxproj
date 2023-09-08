@@ -152,7 +152,7 @@ xcopy /i /e /s /y /f "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode
     <PostBuildEvent>
       <Command>xcopy "$(SolutionDir)../../../data/*" "$(OutDir)../../data" /i /e /s /y /f 
 xcopy "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode_shaders" /i /e /s /y /f 
-xcopy "$(SolutionDir)../../tbb/redist/intel64/vc14/tbb12_debug.dll" "$(OutDir)" /i /e /s /y /f 
+
 </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
@@ -178,7 +178,7 @@ xcopy "$(SolutionDir)../../tbb/redist/intel64/vc14/tbb12_debug.dll" "$(OutDir)" 
     <PostBuildEvent>
       <Command>xcopy "$(SolutionDir)../../../data/*" "$(OutDir)../../data" /i /e /s /y /f 
 xcopy "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode_shaders" /i /e /s /y /f 
-xcopy "$(SolutionDir)../../tbb/redist/intel64/vc14/tbb12.dll" "$(OutDir)" /i /e /s /y /f </Command>
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
