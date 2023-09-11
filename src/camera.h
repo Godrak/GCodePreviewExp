@@ -14,22 +14,22 @@ static const glm::vec3 UP = { 0, 0, 1 };
 
 struct Camera
 {
-    glm::vec3 position      = { 0.0f, 10.0f, 0.0f };
-    glm::vec3 target        = {0, 0, 0};
-    glm::vec3 up            = {0, 0, 1};
-    glm::vec3 forward       = { 0.0f, -1.0f, 0.0f };
+    glm::vec3 position      = { -10.0f, -10.0f, 10.0f };
+    glm::vec3 target        = {0, 0, 0};    
+    glm::vec3 forward       = { 0.577350259f, 0.577350259f, -0.577350259f };
+    glm::vec3 up            = { 0.408248335f, 0.408248335f, 0.816496670f };
     float     stepSize      = 0.5;
     float     rotationSpeed = 2;
     float     zoomSpeed     = 4;
 
 
-	glm::mat4x4 get_view_projection() const {
-		 auto view =  glm::lookAtRH(position, target, up);
-		 auto perspective = glm::perspective<float>(glm::radians(45.0f),
-                                                          (float) globals::screenResolution.x / (float) globals::screenResolution.y, 1.0f,
-                                                          1000.0f);
-		return perspective * view;
-	}
+	  glm::mat4x4 get_view_projection() const {
+		   auto view =  glm::lookAtRH(position, target, up);
+		   auto perspective = glm::perspective<float>(glm::radians(45.0f),
+                                                  (float) globals::screenResolution.x / (float) globals::screenResolution.y, 1.0f,
+                                                  1000.0f);
+		  return perspective * view;
+	  }
 
     void moveCamera(const glm::vec3& movements_vector)
     {

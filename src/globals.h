@@ -60,7 +60,16 @@ namespace globals {
 				}
 				return std::string();
 		}
-}
+
+		struct Statistics
+		{
+				size_t total_moves{ 0 };
+				size_t total_triangles{ 0 };
+				size_t enabled_lines{ 0 };
+		};
+
+		Statistics statistics;
+} // namespace globals
 
 namespace config {
 bool updateCameraPosition = true;
@@ -94,7 +103,7 @@ bool travel_paths_visibility{ true };
 bool enabled_paths_update_required = true;
 
 
-}
+} // namespace config
 
 class SequentialRange
 {

@@ -227,6 +227,8 @@ void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_p
         enabled_lines.push_back(i);
     }
 
+    globals::statistics.enabled_lines = enabled_lines.size();
+
     if (!enabled_lines.empty()) {
         glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_lines_buffer);
         // buffer data to the buffer

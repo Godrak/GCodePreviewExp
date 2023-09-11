@@ -444,14 +444,6 @@ void show_extrusion_roles()
     ImGui::PopStyleVar();
 }
 
-struct Statistics
-{
-    size_t total_moves{ 0 };
-    size_t total_triangles{ 0 };
-};
-
-Statistics statistics;
-
 void show_statistics()
 {
     int width, height;
@@ -473,14 +465,19 @@ void show_statistics()
         ImGui::TextColored(value_color, "%dx%d", width, height);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextColored(label_color, "Moves");
+        ImGui::TextColored(label_color, "Total Moves");
         ImGui::TableSetColumnIndex(1);
-        ImGui::TextColored(value_color, "%d", statistics.total_moves);
+        ImGui::TextColored(value_color, "%d", globals::statistics.total_moves);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextColored(label_color, "Triangles");
+        ImGui::TextColored(label_color, "Total Triangles");
         ImGui::TableSetColumnIndex(1);
-        ImGui::TextColored(value_color, "%d", statistics.total_triangles);
+        ImGui::TextColored(value_color, "%d", globals::statistics.total_triangles);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextColored(label_color, "Enabled lines");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextColored(value_color, "%d", globals::statistics.enabled_lines);
         ImGui::EndTable();
     }
 
@@ -510,7 +507,7 @@ public:
 
     void center_camera() {
         glfwContext::camera.target =  0.5f * (m_min + m_max);
-        glfwContext::camera.position = m_max;
+        glfwContext::camera.position = glfwContext::camera.target + glm::length(m_max - m_min) * glm::normalize(glm::vec3(-1.0f, -1.0f, 1.0f));
     }
 
     glm::vec3 get_size() {
@@ -648,8 +645,8 @@ int main(int argc, char *argv[])
     auto points = readPathPoints(filename);
     rendering::scene_box.update(points);
 
-    statistics.total_moves = points.size();
-    statistics.total_triangles = points.size() * gcode::vertex_data.size() / 3;
+    globals::statistics.total_moves = points.size();
+    globals::statistics.total_triangles = points.size() * gcode::vertex_data.size() / 3;
 
     glfwSetErrorCallback(glfwContext::glfw_error_callback);
     if (!glfwInit())
