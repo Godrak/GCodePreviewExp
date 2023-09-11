@@ -9,10 +9,57 @@
 
 #include <iostream>
 #include <algorithm>
+#include <string>
+#include <map>
 #include "bitset"
 
 namespace globals {
-glm::ivec2 screenResolution = {512,512};
+		glm::ivec2 screenResolution = {512,512};
+
+		enum class GCodeExtrusionRole : uint8_t
+		{
+				None,
+				Perimeter,
+				ExternalPerimeter,
+				OverhangPerimeter,
+				InternalInfill,
+				SolidInfill,
+				TopSolidInfill,
+				Ironing,
+				BridgeInfill,
+				GapFill,
+				Skirt,
+				SupportMaterial,
+				SupportMaterialInterface,
+				WipeTower,
+				// Custom (user defined) G-code block, for example start / end G-code.
+				Custom,
+				// Stopper to count number of enums.
+				Count
+		};
+
+		std::string gcode_extrusion_role_to_string(GCodeExtrusionRole role)
+		{
+				switch (role) {
+				case GCodeExtrusionRole::None:										 return "Unknown";
+				case GCodeExtrusionRole::Perimeter:								 return "Perimeter";
+				case GCodeExtrusionRole::ExternalPerimeter:				 return "External perimeter";
+				case GCodeExtrusionRole::OverhangPerimeter:				 return "Overhang perimeter";
+				case GCodeExtrusionRole::InternalInfill:					 return "Internal infill";
+				case GCodeExtrusionRole::SolidInfill:							 return "Solid infill";
+				case GCodeExtrusionRole::TopSolidInfill:					 return "Top solid infill";
+				case GCodeExtrusionRole::Ironing:									 return "Ironing";
+				case GCodeExtrusionRole::BridgeInfill:						 return "Bridge infill";
+				case GCodeExtrusionRole::GapFill:									 return "Gap fill";
+				case GCodeExtrusionRole::Skirt:										 return "Skirt/Brim";
+				case GCodeExtrusionRole::SupportMaterial:					 return "Support material";
+				case GCodeExtrusionRole::SupportMaterialInterface: return "Support material interface";
+				case GCodeExtrusionRole::WipeTower:								 return "Wipe tower";
+				case GCodeExtrusionRole::Custom:									 return "Custom";
+				default:																				   assert(false);
+				}
+				return std::string();
+		}
 }
 
 namespace config {
@@ -26,12 +73,24 @@ bool camera_center_required = true;
 bool use_travel_moves_data = true;
 bool window_minimized = false;
 bool force_full_model_render = false;
-bool view_travel_paths = true;
-bool view_perimeters = true;
-bool view_inner_perimeters = true;
-bool view_internal_infill = true;
-bool view_solid_infills = true;
-bool view_supports = true;
+std::map<uint8_t, bool> extrusion_roles_visibility{{
+		{ (uint8_t)globals::GCodeExtrusionRole::None, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::Perimeter, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::ExternalPerimeter, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::OverhangPerimeter, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::InternalInfill, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::SolidInfill, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::TopSolidInfill, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::Ironing, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::BridgeInfill, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::GapFill, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::Skirt, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::SupportMaterial, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::SupportMaterialInterface, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::WipeTower, true },
+		{ (uint8_t)globals::GCodeExtrusionRole::Custom, true }
+}};
+bool travel_paths_visibility{ true };
 bool enabled_paths_update_required = true;
 
 

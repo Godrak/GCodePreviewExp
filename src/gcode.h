@@ -211,43 +211,28 @@ void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_p
     if (path.enabled_lines_count > 0)
         enabled_lines.reserve(path.enabled_lines_count);
     for (glm::uint32_t i = sequential_range.get_current_min(); i < sequential_range.get_current_max(); i++) {
-//   { 0.90f, 0.70f, 0.70f },   // None
-//     { 1.00f, 0.90f, 0.30f },   // Perimeter
-//     { 1.00f, 0.49f, 0.22f },   // ExternalPerimeter
-//     { 0.12f, 0.12f, 1.00f },   // OverhangPerimeter
-//     { 0.69f, 0.19f, 0.16f },   // InternalInfill
-//     { 0.59f, 0.33f, 0.80f },   // SolidInfill
-//     { 0.94f, 0.25f, 0.25f },   // TopSolidInfill
-//     { 1.00f, 0.55f, 0.41f },   // Ironing
-//     { 0.30f, 0.50f, 0.73f },   // BridgeInfill
-//     { 1.00f, 1.00f, 1.00f },   // GapFill
-//     { 0.00f, 0.53f, 0.43f },   // Skirt
-//     { 0.00f, 1.00f, 0.00f },   // SupportMaterial
-//     { 0.00f, 0.50f, 0.00f },   // SupportMaterialInterface
-//     { 0.70f, 0.89f, 0.67f },   // WipeTower
-//     { 0.37f, 0.82f, 0.58f },   // Custom
 
-
-        bool is_travel = path_points[i].is_travel_move();
+        const bool is_travel = path_points[i].is_travel_move();
         const unsigned int role = path_points[i].role_from_flags();
 
         if (!path.valid_lines_bitset[i]) continue;
 
-        if (!config::view_travel_paths && is_travel) continue;
-        if (!config::view_perimeters && (role == 2)) continue;
-        if (!config::view_inner_perimeters && (role == 1 || role == 3))continue;
-        if (!config::view_internal_infill && (role == 4)) continue;
-        if (!config::view_solid_infills && (role == 5 || role == 6 || role == 8)) continue;
-        if (!config::view_supports && (role == 11 || role == 12)) continue;
+        if (is_travel) {
+            if (!config::travel_paths_visibility) continue;
+        }
+        else {
+            if (!config::extrusion_roles_visibility[(uint8_t)role]) continue;
+        }
 
         enabled_lines.push_back(i);
     }
 
-    glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_lines_buffer);
-    // buffer data to the buffer
-    glBufferData(GL_TEXTURE_BUFFER, enabled_lines.size() * sizeof(glm::uint32_t), enabled_lines.data(), GL_STATIC_DRAW);
-    path.enabled_lines_count = enabled_lines.size();
-
+    if (!enabled_lines.empty()) {
+        glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_lines_buffer);
+        // buffer data to the buffer
+        glBufferData(GL_TEXTURE_BUFFER, enabled_lines.size() * sizeof(glm::uint32_t), enabled_lines.data(), GL_STATIC_DRAW);
+        path.enabled_lines_count = enabled_lines.size();
+    }
 }
 
 void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &path_points)
@@ -417,7 +402,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
-     //ENABLED LINES BUFFER
+    // ENABLED LINES BUFFER
     // Create a buffer object and bind it to the texture buffer
     glGenBuffers(1, &result.enabled_lines_buffer);
     glBindBuffer(GL_TEXTURE_BUFFER, result.enabled_lines_buffer);

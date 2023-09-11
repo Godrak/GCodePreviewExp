@@ -290,24 +290,16 @@ void show_config_window()
     ImGui::SetNextWindowBgAlpha(0.25f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
-    if (ImGui::Checkbox("force_full_model_render", &config::force_full_model_render)) {
+    if (ImGui::Checkbox("force_full_model_render", &config::force_full_model_render))
          config::enabled_paths_update_required = true;
-    }
-    if (ImGui::Checkbox("view_travel_paths", &config::view_travel_paths)) { config::enabled_paths_update_required = true;}
-    if (ImGui::Checkbox("view_perimeters", &config::view_perimeters)) { config::enabled_paths_update_required = true;}
-    if (ImGui::Checkbox("view_inner_perimeters", &config::view_inner_perimeters)) { config::enabled_paths_update_required = true;}
-    if (ImGui::Checkbox("view_internal_infill", &config::view_internal_infill)) { config::enabled_paths_update_required = true;}
-    if (ImGui::Checkbox("view_solid_infills", &config::view_solid_infills)) { config::enabled_paths_update_required = true;}
-    if (ImGui::Checkbox("view_supports", &config::view_supports)) { config::enabled_paths_update_required = true;}
     if (ImGui::Checkbox("vsync", &config::vsync)) {}
     if (ImGui::Checkbox("use_travel_moves_data", &config::use_travel_moves_data)) {
         config::ranges_update_required = true;
         config::color_update_required = true;
     }
     ImGui::Separator();
-    if (ImGui::Button("Center view", { -1.0f, 0.0f })) {
+    if (ImGui::Button("Center view", { -1.0f, 0.0f }))
         config::camera_center_required = true;
-    }
 
     ImGui::Text("Keep FPS above: ");
     ImGui::SameLine();
@@ -409,6 +401,44 @@ void show_sequential_sliders()
     }
     ImGui::SameLine();
     ImGui::Text("%d", global_max);
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
+void show_extrusion_roles()
+{
+    int width, height;
+    glfwGetWindowSize(glfwContext::window, &width, &height);
+
+    ImGui::SetNextWindowPos({ (float)width, 0.5f * (float)height }, ImGuiCond_Always, { 1.0f, 0.5f });
+    ImGui::SetNextWindowBgAlpha(0.25f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("##extrusion_roles", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+
+    auto append_extrusion_role_checkbox = [](globals::GCodeExtrusionRole role) {
+        bool& value = config::extrusion_roles_visibility[(uint8_t)role];
+        if (ImGui::Checkbox(globals::gcode_extrusion_role_to_string(role).c_str(), &value)) { config::enabled_paths_update_required = true; }
+    };
+
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::None);
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::Perimeter);
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::ExternalPerimeter);
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::OverhangPerimeter); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::InternalInfill); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::SolidInfill); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::TopSolidInfill); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::Ironing); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::BridgeInfill); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::GapFill); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::Skirt); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::SupportMaterial); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::SupportMaterialInterface); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::WipeTower); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::Custom); 
+    ImGui::Separator();
+    if (ImGui::Checkbox("Travel", &config::travel_paths_visibility))
+        config::enabled_paths_update_required = true;
 
     ImGui::End();
     ImGui::PopStyleVar();
@@ -625,6 +655,9 @@ int main(int argc, char *argv[])
     if (!glfwInit())
         return 1;
 
+    const GLFWvidmode* video_mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    assert(video_mode != nullptr);
+
     // Decide GL+GLSL versions
 #if defined(IMGUI_IMPL_OPENGL_ES2)
     // GL ES 2.0 + GLSL 100
@@ -648,13 +681,20 @@ int main(int argc, char *argv[])
 //    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);  // 3.2+ only    
     // glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
 #endif
+    glfwWindowHint(GLFW_VISIBLE, false);
 
     // Create window with graphics context
     // 1284x883 is the size of the canvas in PrusaSlicer preview on 1920x1080 monitor
-    GLFWwindow* window = glfwCreateWindow(1284, 883, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+    const int window_w = 1284;
+    const int window_h = 883;
+    GLFWwindow* window = glfwCreateWindow(window_w, window_h, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
 //    GLFWwindow* window = glfwCreateWindow(1280, 720, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
     if (window == nullptr)
         return 1;
+
+    glfwSetWindowPos(window, (video_mode->width - window_w) / 2, (video_mode->height - window_h) / 2);
+    glfwShowWindow(window);
+
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1); // Enable vsync
 
@@ -766,6 +806,7 @@ int main(int argc, char *argv[])
         show_config_window();
         show_opengl();
         show_visualization_type();
+        show_extrusion_roles();
         show_sequential_sliders();
         show_statistics();
 
