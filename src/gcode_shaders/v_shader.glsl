@@ -1,7 +1,7 @@
 #version 150
 
 uniform mat4 view_projection;
-uniform vec3 camera_position;
+uniform vec3 camera_forward;
 uniform int instance_base;
 
 uniform samplerBuffer positionsTex;
@@ -37,26 +37,14 @@ const float emission = 0.1;
 void main() {
     vec3 UP = vec3(0,0,1);
 
-    // Retrieve the instance ID
-    int id_position = gl_InstanceID;
-    int id_a = int(texelFetch(segmentIndexTex, int(id_position)).r);
+    int id_a = int(texelFetch(segmentIndexTex, gl_InstanceID).r);
     int id_b = id_a + 1;
 
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
     vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
 
-	vec3 line = pos_b - pos_a;
-    vec3 view_a = pos_a - camera_position;
-    vec3 view_b = pos_b - camera_position;
-
-    // directions of the line box in world space
-    float line_len = length(line);
-    vec3 line_dir;
-    if (line_len < 1e-4) {
-        line_dir = vec3(1.0,0.0,0.0);
-    }else {
-        line_dir = line / line_len;
-    }
+    // direction of the line in world space
+	vec3 line_dir = normalize(pos_b - pos_a);
     vec3 right_dir;
     if (abs(dot(line_dir, UP)) > 0.9) {
         // For vertical lines, the width and height should be same, there is no concept of up and down.
@@ -68,7 +56,7 @@ void main() {
 
     vec3 up_dir = normalize(cross(right_dir, line_dir));
 
-    float dir_sign = sign(dot(view_b, view_b) - dot(view_a, view_a));
+    float dir_sign = sign(dot(camera_forward, line_dir));
     int id_close = (dir_sign < 0) ? id_b : id_a;
     int id_far = (dir_sign < 0) ? id_a : id_b;
 
@@ -103,13 +91,11 @@ void main() {
 
     int id_final = vertex_id < 4 ? id_close : id_far;
 
-    vec3 camera_view_dir = normalize((id_close == id_a ? pos_a : pos_b) - camera_position);
     vec3 close_height_width_angle = texelFetch(heightWidthAngleTex, id_close).xyz;
 
     vec3 diagonal_dir_border = normalize(close_height_width_angle.x * up_dir + close_height_width_angle.y * right_dir);
-    bool is_vertical_view = abs(dot(camera_view_dir, up_dir)) / abs(dot(diagonal_dir_border, up_dir)) >
-        abs(dot(camera_view_dir, right_dir)) / abs(dot(diagonal_dir_border, right_dir));
-
+    bool is_vertical_view = abs(dot(camera_forward, up_dir)) / abs(dot(diagonal_dir_border, up_dir)) >
+        abs(dot(camera_forward, right_dir)) / abs(dot(diagonal_dir_border, right_dir));
 
     vec2 signs = horizontal_vertical_view_signs_array[vertex_id + 8*int(is_vertical_view)];
 
@@ -117,8 +103,8 @@ void main() {
     float half_height = 0.5 * final_height_width_angle.x;
     float half_width = 0.5 * final_height_width_angle.y;
 
-    vec3 horizontal_dir = half_width * right_dir * -sign(dot(view_a, right_dir));
-    vec3 vertical_dir = half_height * up_dir * -sign(dot(view_a, up_dir));
+    vec3 horizontal_dir = half_width * right_dir * -sign(dot(camera_forward, right_dir));
+    vec3 vertical_dir = half_height * up_dir * -sign(dot(camera_forward, up_dir));
 
 	vec3 segment_pos = (id_final == id_a) ? pos_a : pos_b;
     vec3 pos = segment_pos + signs.x * horizontal_dir + signs.y * vertical_dir;

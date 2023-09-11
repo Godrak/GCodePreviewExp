@@ -21,31 +21,28 @@
 
 namespace gcode {
 
-static unsigned int extract_role_from_flags(unsigned int flags) { return flags & 0xFF; }
-static unsigned int extract_type_from_flags(unsigned int flags) { return (flags >> 8) & 0xFF; }
+unsigned int extract_role_from_flags(unsigned int flags) { return flags & 0xFF; }
+unsigned int extract_type_from_flags(unsigned int flags) { return (flags >> 8) & 0xFF; }
 
 GLuint gcodeVAO, vertexBuffer;
-
-GLuint pathSSBObindPoint = 5;
 
 GLint vid_loc = 0;
 
 //     /1-------6\    
 //    / |       | \  
-//   2  0-------5  7
+//   2--0-------5--7
 //    \ |       | /  
 //      3-------4    
-size_t vertex_data_size = 24;
-int vertex_data[] = {  
-        0, 1, 2,  // front spike
-        0, 2, 3,// front spike
-        0, 3, 4, //right/bottom body 
-        0, 4, 5, //right/bottom body 
-        0, 5, 6, //left/top body 
-        0, 6, 1, //left/top body 
-        5, 4, 7, // back spike
-        5, 7, 6, // back spike
-        };
+const std::vector<uint8_t> vertex_data = {
+    0, 1, 2, // front spike
+    0, 2, 3, // front spike
+    0, 3, 4, // right/bottom body 
+    0, 4, 5, // right/bottom body 
+    0, 5, 6, // left/top body 
+    0, 6, 1, // left/top body 
+    5, 4, 7, // back spike
+    5, 7, 6, // back spike
+};
 
 struct PathPoint
 {
@@ -475,11 +472,11 @@ void init()
 
     checkGl();
 
-    glBufferData(GL_ARRAY_BUFFER, vertex_data_size * sizeof(int), vertex_data, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vertex_data.size() * sizeof(uint8_t), vertex_data.data(), GL_STATIC_DRAW);
 
     // vertex attributes - id:
     glEnableVertexAttribArray(vid_loc);
-    glVertexAttribIPointer(vid_loc, 1, GL_INT, sizeof(int), (void *)0);
+    glVertexAttribIPointer(vid_loc, 1, GL_UNSIGNED_BYTE, sizeof(uint8_t), (void*)0);
     checkGl();
     glBindVertexArray(0);
 }

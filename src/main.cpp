@@ -257,6 +257,12 @@ static std::vector<gcode::PathPoint> readPathPoints(const std::string &filename)
     // Read each PathPoint object from the file
     for (auto &point : pathPoints) {
         file.read(reinterpret_cast<char *>(&point), sizeof(point));
+        if (point.is_extrude_move())
+            point.position.z -= 0.5f * point.height;
+        else if (point.is_travel_move()) {
+           point.width = 0.025f;
+           point.height = 0.025f;
+        }
     }
 
     file.close();
@@ -410,8 +416,8 @@ void show_sequential_sliders()
 
 struct Statistics
 {
-  size_t total_moves{ 0 };
-  size_t total_triangles{ 0 };
+    size_t total_moves{ 0 };
+    size_t total_triangles{ 0 };
 };
 
 Statistics statistics;
@@ -430,6 +436,11 @@ void show_statistics()
     const ImVec4 value_color(1.0f, 1.0f, 1.0f, 1.0f);
 
     if (ImGui::BeginTable("Statistics", 2)) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextColored(label_color, "Window size");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextColored(value_color, "%dx%d", width, height);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         ImGui::TextColored(label_color, "Moves");
@@ -567,17 +578,17 @@ void render(gcode::BufferedPath &path)
 
     const int vp_id = ::glGetUniformLocation(shaderProgram::gcode_program, "view_projection");
     assert(vp_id >= 0);
-    const int camera_position_id = ::glGetUniformLocation(shaderProgram::gcode_program, "camera_position");
-    assert(camera_position_id >= 0);
+    const int camera_forward_id = ::glGetUniformLocation(shaderProgram::gcode_program, "camera_forward");
+    assert(camera_forward_id >= 0);
 
     auto view_projection = glfwContext::camera.get_view_projection();
-    auto camera_position = glfwContext::camera.position;
     glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
-    glUniform3fv(camera_position_id, 1, glm::value_ptr(camera_position));
+    auto camera_forward = glfwContext::camera.forward;
+    glUniform3fv(camera_forward_id, 1, glm::value_ptr(camera_forward));
     checkGl();
 
     if (path.enabled_lines_count > 0)
-        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, path.enabled_lines_count);
+        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data.size(), path.enabled_lines_count);
     checkGl();
 
     glUseProgram(0);
@@ -608,7 +619,7 @@ int main(int argc, char *argv[])
     rendering::scene_box.update(points);
 
     statistics.total_moves = points.size();
-    statistics.total_triangles = points.size() * gcode::vertex_data_size / 3;
+    statistics.total_triangles = points.size() * gcode::vertex_data.size() / 3;
 
     glfwSetErrorCallback(glfwContext::glfw_error_callback);
     if (!glfwInit())
@@ -639,7 +650,9 @@ int main(int argc, char *argv[])
 #endif
 
     // Create window with graphics context
-    GLFWwindow *window = glfwCreateWindow(1280, 720, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+    // 1284x883 is the size of the canvas in PrusaSlicer preview on 1920x1080 monitor
+    GLFWwindow* window = glfwCreateWindow(1284, 883, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+//    GLFWwindow* window = glfwCreateWindow(1280, 720, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
     if (window == nullptr)
         return 1;
     glfwMakeContextCurrent(window);
