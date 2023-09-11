@@ -65,6 +65,7 @@ namespace globals {
 		{
 				size_t total_moves{ 0 };
 				size_t total_triangles{ 0 };
+				size_t moves_size{ 0 };
 				size_t enabled_lines{ 0 };
 		};
 

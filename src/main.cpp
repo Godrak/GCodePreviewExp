@@ -130,18 +130,22 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
         }
         case GLFW_KEY_LEFT: {
             sequential_range.decrease_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_RIGHT: {
             sequential_range.increase_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_DOWN: {
             sequential_range.decrease_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_UP: {
             sequential_range.increase_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         }
@@ -175,18 +179,22 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
         switch (key) {
         case GLFW_KEY_LEFT: {
             sequential_range.decrease_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_RIGHT: {
             sequential_range.increase_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_DOWN: {
             sequential_range.decrease_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_UP: {
             sequential_range.increase_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         }
@@ -238,7 +246,7 @@ static void glfw_window_iconify_callback(GLFWwindow* window, int value)
 } // namespace glfwContext
 
 // Reader function to load vector of PathPoints from a file
-static std::vector<gcode::PathPoint> readPathPoints(const std::string &filename)
+static std::vector<gcode::PathPoint> readPathPoints(const std::string& filename)
 {
     std::vector<gcode::PathPoint> pathPoints;
 
@@ -251,17 +259,17 @@ static std::vector<gcode::PathPoint> readPathPoints(const std::string &filename)
     // Read the size of the vector
     size_t size;
     file.read(reinterpret_cast<char *>(&size), sizeof(size));
-    std::cout << "SIZE IS: " << size << std::endl;
     pathPoints.resize(size);
 
     // Read each PathPoint object from the file
+    static const float travel_radius = 0.05f;
     for (auto &point : pathPoints) {
         file.read(reinterpret_cast<char *>(&point), sizeof(point));
         if (point.is_extrude_move())
             point.position.z -= 0.5f * point.height;
         else if (point.is_travel_move()) {
-           point.width = 0.025f;
-           point.height = 0.025f;
+            point.width = travel_radius;
+            point.height = travel_radius;
         }
     }
 
@@ -475,6 +483,11 @@ void show_statistics()
         ImGui::TextColored(value_color, "%d", globals::statistics.total_triangles);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        ImGui::TextColored(label_color, "Moves Size");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextColored(value_color, "%d", globals::statistics.moves_size);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
         ImGui::TextColored(label_color, "Enabled lines");
         ImGui::TableSetColumnIndex(1);
         ImGui::TextColored(value_color, "%d", globals::statistics.enabled_lines);
@@ -647,6 +660,7 @@ int main(int argc, char *argv[])
 
     globals::statistics.total_moves = points.size();
     globals::statistics.total_triangles = points.size() * gcode::vertex_data.size() / 3;
+    globals::statistics.moves_size = points.size() * sizeof(gcode::PathPoint);
 
     glfwSetErrorCallback(glfwContext::glfw_error_callback);
     if (!glfwInit())
@@ -749,8 +763,6 @@ int main(int argc, char *argv[])
 
     sequential_range.set_global_max(path.total_points_count);
     sequential_range.set_current_max(path.total_points_count);
-
-    std::cout << "PATHS BUFFERED" << std::endl;
 
     // Main loop
 #ifdef __EMSCRIPTEN__

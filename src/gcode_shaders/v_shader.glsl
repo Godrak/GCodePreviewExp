@@ -23,21 +23,21 @@ in int vertex_id;
 
 out vec3 color;
 
-const vec3 light_top_dir = vec3(-0.4574957, 0.4574957, 0.7624929);
+const vec3  light_top_dir = vec3(-0.4574957, 0.4574957, 0.7624929);
 const float light_top_diffuse = 0.6*0.8;
 const float light_top_specular = 0.6*0.125;
 const float light_top_shininess = 20.0;
 
-const vec3 light_front_dir = vec3(0.6985074, 0.1397015, 0.6985074);
+const vec3  light_front_dir = vec3(0.6985074, 0.1397015, 0.6985074);
 const float light_front_diffuse = 0.6*0.3;
 
 const float ambient = 0.3;
 const float emission = 0.1;
 
-void main() {
-    vec3 UP = vec3(0,0,1);
+const vec3 UP = vec3(0,0,1);
 
-    int id_a = int(texelFetch(segmentIndexTex, gl_InstanceID).r);
+void main() {
+    int id_a = texelFetch(segmentIndexTex, gl_InstanceID).r;
     int id_b = id_a + 1;
 
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
@@ -46,15 +46,16 @@ void main() {
     // direction of the line in world space
 	vec3 line_dir = normalize(pos_b - pos_a);
     vec3 right_dir;
-    if (abs(dot(line_dir, UP)) > 0.9) {
+    if (abs(dot(line_dir, UP)) > 0.9999) {
         // For vertical lines, the width and height should be same, there is no concept of up and down.
         // For simplicity, the code will expand width in the x axis, and height in the y axis 
-        right_dir = normalize(cross(vec3(1,0,0), line_dir));
+        right_dir = vec3(1.0, 0.0, 0.0);
     } else {
         right_dir = normalize(cross(line_dir, UP));
     }
 
-    vec3 up_dir = normalize(cross(right_dir, line_dir));
+    // no need to normalize, the two vectors are already normalized and form a 90 degrees angle
+    vec3 up_dir = cross(right_dir, line_dir);
 
     float dir_sign = sign(dot(camera_forward, line_dir));
     int id_close = (dir_sign < 0) ? id_b : id_a;
@@ -107,13 +108,15 @@ void main() {
     vec3 vertical_dir = half_height * up_dir * -sign(dot(camera_forward, up_dir));
 
 	vec3 segment_pos = (id_final == id_a) ? pos_a : pos_b;
-    vec3 pos = segment_pos + signs.x * horizontal_dir + signs.y * vertical_dir;
+    vec3 pos;
 
     if (vertex_id == 2 || vertex_id == 7) {
         float line_dir_sign = id_final == id_a ? -1.0 : 1.0;
         pos = segment_pos + line_dir_sign * line_dir * final_height_width_angle.y * 0.5 * sin(final_height_width_angle.z * 0.5);
         pos += right_dir * final_height_width_angle.y * 0.5 * cos(final_height_width_angle.z * 0.5);
     }
+	else
+		pos = segment_pos + signs.x * horizontal_dir + signs.y * vertical_dir;
 
     // LIGHTING begin
     vec3 color_base = decode_color(texelFetch(colorsTex, id_final).x);

@@ -339,13 +339,9 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
         }
 
         const PathPoint &p = path_points[i];
-        positions.push_back({p.position});
-        const float height = p.is_travel_move() ? 0.1f : p.height;
-        const float width  = p.is_travel_move() ? 0.1f : p.width;
-
+        positions.push_back(p.position);
         const float angle = atan2(prev_line.x * this_line.y - prev_line.y * this_line.x, glm::dot(prev_line, this_line));
-
-        height_width_angle.push_back({height, width, angle}); 
+        height_width_angle.push_back({ p.height, p.width, angle });
     }
 
     result.total_points_count = path_points.size();
@@ -375,7 +371,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_angle_buffer);
 
     // buffer data to the buffer
-    glBufferData(GL_TEXTURE_BUFFER, height_width_angle.size() * sizeof(glm::vec3), height_width_angle.data(), GL_DYNAMIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, height_width_angle.size() * sizeof(glm::vec3), height_width_angle.data(), GL_STATIC_DRAW);
 
     // Create and bind the texture
     glGenTextures(1, &result.height_width_angle_texture);
