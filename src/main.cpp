@@ -465,6 +465,19 @@ void show_statistics()
     const ImVec4 label_color(1.0f, 1.0f, 0.0f, 1.0f);
     const ImVec4 value_color(1.0f, 1.0f, 1.0f, 1.0f);
 
+    auto add_memsize_row = [&](const std::string& label, size_t size) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        const std::string key = label + " size";
+        ImGui::TextColored(label_color, key.c_str());
+        ImGui::TableSetColumnIndex(1);
+        const auto [mem_size, units] = globals::format_memsize(size);
+        if (units == "bytes")
+            ImGui::TextColored(value_color, "%d %s", size, units.c_str());
+        else
+            ImGui::TextColored(value_color, "%.3f %s", mem_size, units.c_str());
+    };
+
     if (ImGui::BeginTable("Statistics", 2)) {
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
@@ -473,24 +486,21 @@ void show_statistics()
         ImGui::TextColored(value_color, "%dx%d", width, height);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextColored(label_color, "Total Moves");
+        ImGui::TextColored(label_color, "Total moves");
         ImGui::TableSetColumnIndex(1);
         ImGui::TextColored(value_color, "%d", globals::statistics.total_moves);
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        ImGui::TextColored(label_color, "Total Triangles");
-        ImGui::TableSetColumnIndex(1);
-        ImGui::TextColored(value_color, "%d", globals::statistics.total_triangles);
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        ImGui::TextColored(label_color, "Moves Size");
-        ImGui::TableSetColumnIndex(1);
-        ImGui::TextColored(value_color, "%d", globals::statistics.moves_size);
+        add_memsize_row("Moves", globals::statistics.moves_size);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         ImGui::TextColored(label_color, "Enabled lines");
         ImGui::TableSetColumnIndex(1);
         ImGui::TextColored(value_color, "%d", globals::statistics.enabled_lines);
+        add_memsize_row("Enabled lines buffer", globals::statistics.enabled_lines_size);
+        add_memsize_row("Colors buffer", globals::statistics.colors_size);
+        add_memsize_row("Positions buffer", globals::statistics.positions_size);
+        add_memsize_row("HWA buffer", globals::statistics.height_width_angle_size);
+        add_memsize_row("Vertex data buffer", globals::statistics.vertex_data_size);
+        add_memsize_row("Total buffers", globals::statistics.buffers_size());
         ImGui::EndTable();
     }
 
@@ -659,7 +669,6 @@ int main(int argc, char *argv[])
     rendering::scene_box.update(points);
 
     globals::statistics.total_moves = points.size();
-    globals::statistics.total_triangles = points.size() * gcode::vertex_data.size() / 3;
     globals::statistics.moves_size = points.size() * sizeof(gcode::PathPoint);
 
     glfwSetErrorCallback(glfwContext::glfw_error_callback);
@@ -696,10 +705,10 @@ int main(int argc, char *argv[])
 
     // Create window with graphics context
     // 1284x883 is the size of the canvas in PrusaSlicer preview on 1920x1080 monitor
-    const int window_w = 1284;
-    const int window_h = 883;
+    // 1788x916 is the size of the canvas in GCodeViewer on 1920x1080 monitor
+    const int window_w = 1284; // 1788;
+    const int window_h = 883;  // 916;
     GLFWwindow* window = glfwCreateWindow(window_w, window_h, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
-//    GLFWwindow* window = glfwCreateWindow(1280, 720, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
     if (window == nullptr)
         return 1;
 

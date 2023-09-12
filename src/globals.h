@@ -64,12 +64,32 @@ namespace globals {
 		struct Statistics
 		{
 				size_t total_moves{ 0 };
-				size_t total_triangles{ 0 };
 				size_t moves_size{ 0 };
 				size_t enabled_lines{ 0 };
+				size_t enabled_lines_size{ 0 };
+				size_t colors_size{ 0 };
+				size_t positions_size{ 0 };
+				size_t height_width_angle_size{ 0 };
+				size_t vertex_data_size{ 0 };
+				size_t buffers_size() const { return enabled_lines_size + colors_size + positions_size + height_width_angle_size + vertex_data_size; }
 		};
 
 		Statistics statistics;
+
+		std::pair<float, std::string> format_memsize(size_t size)
+		{
+				static const size_t KILO = 1024;
+				static const size_t MEGA = 1024 * 1024;
+				static const size_t GIGA = 1024 * 1024 * 1024;
+				if (size < KILO)
+						return { float(size), "bytes" };
+				else if (size < MEGA)
+						return { float(size) / float(KILO), "KB" };
+				else if (size < GIGA)
+						return { float(size) / float(MEGA), "MB" };
+				else
+						return { float(size) / float(GIGA), "GB" };
+		}
 } // namespace globals
 
 namespace config {

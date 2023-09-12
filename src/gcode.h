@@ -207,7 +207,7 @@ struct BufferedPath
 };
 
 void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_points) {
-    std::vector<glm::uint32_t> enabled_lines{};
+    std::vector<uint32_t> enabled_lines{};
     if (path.enabled_lines_count > 0)
         enabled_lines.reserve(path.enabled_lines_count);
     for (glm::uint32_t i = sequential_range.get_current_min(); i < sequential_range.get_current_max(); i++) {
@@ -228,11 +228,12 @@ void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_p
     }
 
     globals::statistics.enabled_lines = enabled_lines.size();
+    globals::statistics.enabled_lines_size = enabled_lines.size() * sizeof(uint32_t);
 
     if (!enabled_lines.empty()) {
         glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_lines_buffer);
         // buffer data to the buffer
-        glBufferData(GL_TEXTURE_BUFFER, enabled_lines.size() * sizeof(glm::uint32_t), enabled_lines.data(), GL_STATIC_DRAW);
+        glBufferData(GL_TEXTURE_BUFFER, enabled_lines.size() * sizeof(uint32_t), enabled_lines.data(), GL_STATIC_DRAW);
         path.enabled_lines_count = enabled_lines.size();
     }
 }
@@ -307,6 +308,9 @@ void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &pa
     for (size_t i = 0; i < path_points.size(); i++) {
         colors[i] = format_color(path_points[i]);
     }
+
+    globals::statistics.colors_size = colors.size() * sizeof(float);
+
     assert(path.color_buffer > 0);
     glBindBuffer(GL_TEXTURE_BUFFER, path.color_buffer);
     // buffer data to the path buffer
@@ -324,12 +328,13 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     result.valid_lines_bitset.setAll();
 
     for (size_t i = 0; i < path_points.size(); i++) {
-        bool      prev_line_valid = i > 0 && result.valid_lines_bitset[i - 1];
-        glm::vec3 prev_line       = prev_line_valid ? (path_points[i].position - path_points[i - 1].position) : glm::vec3(0);
+        const bool prev_line_valid = i > 0 && result.valid_lines_bitset[i - 1];
+        const glm::vec3 prev_line = prev_line_valid ? (path_points[i].position - path_points[i - 1].position) : glm::vec3(0);
 
-        bool      this_line_valid = i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position;
-        
-        glm::vec3 this_line       = this_line_valid ? (path_points[i + 1].position - path_points[i].position) : glm::vec3(0);
+        const bool this_line_valid = i + 1 < path_points.size() &&
+            path_points[i + 1].position != path_points[i].position &&
+            path_points[i + 1].type_from_flags() == path_points[i].type_from_flags();
+        const glm::vec3 this_line = this_line_valid ? (path_points[i + 1].position - path_points[i].position) : glm::vec3(0);
 
         if (this_line_valid) {
             // there is a valid path between point i and i+1.
@@ -345,6 +350,9 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     }
 
     result.total_points_count = path_points.size();
+
+    globals::statistics.positions_size = positions.size() * sizeof(glm::vec3);
+    globals::statistics.height_width_angle_size = height_width_angle.size() * sizeof(glm::vec3);
 
     ///GCODE DATA
     glBindVertexArray(gcodeVAO);
@@ -454,6 +462,8 @@ void init()
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
 
     checkGl();
+
+    globals::statistics.vertex_data_size = vertex_data.size() * sizeof(uint8_t);
 
     glBufferData(GL_ARRAY_BUFFER, vertex_data.size() * sizeof(uint8_t), vertex_data.data(), GL_STATIC_DRAW);
 
