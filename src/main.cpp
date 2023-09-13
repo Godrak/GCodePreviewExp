@@ -303,6 +303,7 @@ void show_config_window()
 
     ImGui::Checkbox("wireframe", &config::geometryMode);
     if (ImGui::Checkbox("vsync", &config::vsync)) { glfwSwapInterval(config::vsync ? 1 : 0); }
+    ImGui::Checkbox("orthographic camera", &config::orthographic_camera);
     ImGui::Separator();
     if (ImGui::Button("Center view", { -1.0f, 0.0f }))
         config::camera_center_required = true;
@@ -581,7 +582,9 @@ void switchConfiguration()
 
 void render(gcode::BufferedPath &path)
 {
-    glfwContext::camera.moveCamera({glfwContext::forth_back, glfwContext::left_right, glfwContext::up_down});
+    const glm::vec3 camera_displacement(glfwContext::forth_back, glfwContext::left_right, glfwContext::up_down);
+    if (glm::length(camera_displacement) > 0.0f)
+        glfwContext::camera.moveCamera(camera_displacement);
 
     if (config::camera_center_required) {
         scene_box.center_camera();
