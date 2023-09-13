@@ -62,7 +62,6 @@
 
 namespace glfwContext {
 Camera camera;
-int fps_target_value;
 
 GLFWwindow *window{nullptr};
 int         forth_back = 0;
@@ -82,16 +81,6 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
     switch (action) {
     case GLFW_PRESS: {
         switch (key) {
-        case GLFW_KEY_F2: {
-            config::geometryMode = 1 - config::geometryMode;
-            break;
-        }
-        case GLFW_KEY_F3: {
-            config::vsync = 1 - config::vsync;
-            std::cout << "vsync: " << config::vsync << std::endl;
-            glfwSwapInterval(config::vsync);
-            break;
-        }
         case GLFW_KEY_W: {
             forth_back = 1;
             break;
@@ -311,20 +300,12 @@ void show_config_window()
     ImGui::SetNextWindowBgAlpha(0.25f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
-    if (ImGui::Checkbox("force_full_model_render", &config::force_full_model_render))
-         config::enabled_paths_update_required = true;
-    if (ImGui::Checkbox("vsync", &config::vsync)) {}
-    if (ImGui::Checkbox("use_travel_moves_data", &config::use_travel_moves_data)) {
-        config::ranges_update_required = true;
-        config::color_update_required = true;
-    }
+
+    ImGui::Checkbox("wireframe", &config::geometryMode);
+    if (ImGui::Checkbox("vsync", &config::vsync)) { glfwSwapInterval(config::vsync ? 1 : 0); }
     ImGui::Separator();
     if (ImGui::Button("Center view", { -1.0f, 0.0f }))
         config::camera_center_required = true;
-
-    ImGui::Text("Keep FPS above: ");
-    ImGui::SameLine();
-    ImGui::SliderInt("##slider_low", &glfwContext::fps_target_value, 0, 60, "%d", ImGuiSliderFlags_NoInput);
 
     ImGui::End();
     ImGui::PopStyleVar();
@@ -439,13 +420,22 @@ void show_extrusion_roles()
 
     auto append_extrusion_role_checkbox = [](globals::GCodeExtrusionRole role) {
         bool& value = config::extrusion_roles_visibility[role];
-        if (ImGui::Checkbox(globals::gcode_extrusion_role_to_string(role).c_str(), &value)) { config::enabled_paths_update_required = true; }
+        if (ImGui::Checkbox(globals::gcode_extrusion_role_to_string(role).c_str(), &value)) {
+            config::enabled_paths_update_required = true;
+            if (role == globals::GCodeExtrusionRole::Custom) {
+                if (config::visualization_type == 2 /*Width*/ ||
+                    config::visualization_type == 6 /*Volumetric flow rate*/)
+                  config::ranges_update_required = true;
+                  config::color_update_required = true;
+            }
+        }
     };
     auto append_option_checkbox = [](globals::EMoveType type) {
         bool& value = config::options_visibility[type];
         if (ImGui::Checkbox(globals::gcode_move_type_to_string(type).c_str(), &value)) { config::enabled_paths_update_required = true; }
     };
 
+    ImGui::Text("Extrusion roles");
     append_extrusion_role_checkbox(globals::GCodeExtrusionRole::None);
     append_extrusion_role_checkbox(globals::GCodeExtrusionRole::Perimeter);
     append_extrusion_role_checkbox(globals::GCodeExtrusionRole::ExternalPerimeter);
@@ -462,8 +452,12 @@ void show_extrusion_roles()
     append_extrusion_role_checkbox(globals::GCodeExtrusionRole::WipeTower); 
     append_extrusion_role_checkbox(globals::GCodeExtrusionRole::Custom); 
     ImGui::Separator();
-    if (ImGui::Checkbox("Travel", &config::travel_paths_visibility))
+    ImGui::Text("Options");
+    if (ImGui::Checkbox("Travel", &config::travel_paths_visibility)) {
         config::enabled_paths_update_required = true;
+        config::ranges_update_required = true;
+        config::color_update_required = true;
+    }
     append_option_checkbox(globals::EMoveType::Retract);
     append_option_checkbox(globals::EMoveType::Unretract);
     append_option_checkbox(globals::EMoveType::Seam);
@@ -582,13 +576,7 @@ Camera camera_snapshot = glfwContext::camera;
 
 void switchConfiguration()
 {
-    if (config::geometryMode) {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        checkGl();
-    } else {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        checkGl();
-    }
+    glPolygonMode(GL_FRONT_AND_BACK, config::geometryMode ? GL_LINE : GL_FILL);
 }
 
 void render(gcode::BufferedPath &path)
@@ -741,7 +729,7 @@ int main(int argc, char *argv[])
     glfwShowWindow(window);
 
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // Enable vsync
+    glfwSwapInterval(config::vsync ? 1 : 0);
 
     glfwContext::window = window;
 

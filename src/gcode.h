@@ -59,6 +59,10 @@ struct PathPoint
     globals::EMoveType type_from_flags() const { return globals::extract_type_from_flags(flags); }
 
     bool is_extrude_move() const { return globals::extract_type_from_flags(flags) == globals::EMoveType::Extrude; }
+    bool is_custom_gcode_move() const {
+        return globals::extract_type_from_flags(flags) == globals::EMoveType::Extrude &&
+               globals::extract_role_from_flags(flags) == globals::GCodeExtrusionRole::Custom;
+    }
     bool is_travel_move() const { return globals::extract_type_from_flags(flags) == globals::EMoveType::Travel; }
     bool is_wipe_move() const { return globals::extract_type_from_flags(flags) == globals::EMoveType::Wipe; }
     bool is_option_move() const {
@@ -215,13 +219,15 @@ void set_ranges(const std::vector<PathPoint>& path_points)
     for (size_t i = 0; i < path_points.size(); i++) {
         const PathPoint& p = path_points[i];
         if (p.is_extrude_move()) {
-            width_range.update(p.width);
+            if (config::extrusion_roles_visibility[globals::GCodeExtrusionRole::Custom] || !p.is_custom_gcode_move()) {
+                width_range.update(p.width);
+                volumetricrate_range.update(p.volumetricrate);
+            }
             height_range.update(p.height);
             fanspeed_range.update(p.fanspeed);
             temperature_range.update(p.temperature);
-            volumetricrate_range.update(p.volumetricrate);
         }
-        if (config::use_travel_moves_data || p.is_extrude_move())
+        if (config::travel_paths_visibility || p.is_extrude_move())
             speed_range.update(p.speed);
     }
 }
@@ -245,13 +251,15 @@ void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_p
         const globals::GCodeExtrusionRole role = path_points[i].role_from_flags();
 
         if (!path.valid_lines_bitset[i]) continue;
-        if (path_points[i].is_travel_move())
+        if (path_points[i].is_travel_move()) {
             if (!config::travel_paths_visibility) continue;
-        else if (path_points[i].is_option_move())
+        }
+        else if (path_points[i].is_option_move()) {
             if (!config::options_visibility[path_points[i].type_from_flags()]) continue;
-        else
+        }
+        else {
             if (!config::extrusion_roles_visibility[role]) continue;
-
+        }
         enabled_lines.push_back(i);
     }
 

@@ -142,15 +142,13 @@ namespace globals {
 
 namespace config {
 bool updateCameraPosition = true;
-bool geometryMode = false;
-bool vsync = true;
+bool geometryMode{ false };
+bool vsync{ true };
 int visualization_type = 0;
 bool ranges_update_required = true;
 bool color_update_required = true;
 bool camera_center_required = true;
-bool use_travel_moves_data = true;
 bool window_minimized = false;
-bool force_full_model_render = false;
 std::map<globals::GCodeExtrusionRole, bool> extrusion_roles_visibility{{
 		{ globals::GCodeExtrusionRole::None, true },
 		{ globals::GCodeExtrusionRole::Perimeter, true },
