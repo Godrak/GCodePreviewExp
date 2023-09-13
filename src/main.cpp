@@ -261,8 +261,11 @@ static std::vector<gcode::PathPoint> readPathPoints(const std::string& filename)
     file.read(reinterpret_cast<char *>(&size), sizeof(size));
     pathPoints.resize(size);
 
+//    std::map<globals::EMoveType, size_t> types_counters;
+
     // Read each PathPoint object from the file
     static const float travel_radius = 0.05f;
+    static const float wipes_radius = 0.15f;
     for (auto &point : pathPoints) {
         file.read(reinterpret_cast<char *>(&point), sizeof(point));
         if (point.is_extrude_move())
@@ -271,6 +274,16 @@ static std::vector<gcode::PathPoint> readPathPoints(const std::string& filename)
             point.width = travel_radius;
             point.height = travel_radius;
         }
+        else if (point.is_wipe_move()) {
+            point.width = wipes_radius;
+            point.height = wipes_radius;
+        }
+
+//        const globals::EMoveType type = globals::extract_type_from_flags(point.flags);
+//        auto it = types_counters.find(type);
+//        if (it == types_counters.end())
+//            it = types_counters.insert({ type, 0 }).first;
+//        it->second++;
     }
 
     file.close();
@@ -425,8 +438,12 @@ void show_extrusion_roles()
     ImGui::Begin("##extrusion_roles", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
 
     auto append_extrusion_role_checkbox = [](globals::GCodeExtrusionRole role) {
-        bool& value = config::extrusion_roles_visibility[(uint8_t)role];
+        bool& value = config::extrusion_roles_visibility[role];
         if (ImGui::Checkbox(globals::gcode_extrusion_role_to_string(role).c_str(), &value)) { config::enabled_paths_update_required = true; }
+    };
+    auto append_option_checkbox = [](globals::EMoveType type) {
+        bool& value = config::options_visibility[type];
+        if (ImGui::Checkbox(globals::gcode_move_type_to_string(type).c_str(), &value)) { config::enabled_paths_update_required = true; }
     };
 
     append_extrusion_role_checkbox(globals::GCodeExtrusionRole::None);
@@ -447,6 +464,14 @@ void show_extrusion_roles()
     ImGui::Separator();
     if (ImGui::Checkbox("Travel", &config::travel_paths_visibility))
         config::enabled_paths_update_required = true;
+    append_option_checkbox(globals::EMoveType::Retract);
+    append_option_checkbox(globals::EMoveType::Unretract);
+    append_option_checkbox(globals::EMoveType::Seam);
+    append_option_checkbox(globals::EMoveType::Tool_change);
+    append_option_checkbox(globals::EMoveType::Color_change);
+    append_option_checkbox(globals::EMoveType::Pause_print);
+    append_option_checkbox(globals::EMoveType::Custom_GCode);
+    append_option_checkbox(globals::EMoveType::Wipe);
 
     ImGui::End();
     ImGui::PopStyleVar();

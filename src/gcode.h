@@ -21,9 +21,6 @@
 
 namespace gcode {
 
-unsigned int extract_role_from_flags(unsigned int flags) { return flags & 0xFF; }
-unsigned int extract_type_from_flags(unsigned int flags) { return (flags >> 8) & 0xFF; }
-
 GLuint gcodeVAO, vertexBuffer;
 
 GLint vid_loc = 0;
@@ -58,11 +55,45 @@ struct PathPoint
     unsigned int colorid;
 
     unsigned int encode_flags(unsigned int role, unsigned int type) { flags = role << 0 | type << 8; return flags; }
-    unsigned int role_from_flags() const { return extract_role_from_flags(flags); }
-    unsigned int type_from_flags() const { return extract_type_from_flags(flags); }
-    bool is_travel_move() const  { return extract_type_from_flags(flags) == 8; }
-    bool is_extrude_move() const { return extract_type_from_flags(flags) == 10; }
+    globals::GCodeExtrusionRole role_from_flags() const { return globals::extract_role_from_flags(flags); }
+    globals::EMoveType type_from_flags() const { return globals::extract_type_from_flags(flags); }
+
+    bool is_extrude_move() const { return globals::extract_type_from_flags(flags) == globals::EMoveType::Extrude; }
+    bool is_travel_move() const { return globals::extract_type_from_flags(flags) == globals::EMoveType::Travel; }
+    bool is_wipe_move() const { return globals::extract_type_from_flags(flags) == globals::EMoveType::Wipe; }
+    bool is_option_move() const {
+        switch (globals::extract_type_from_flags(flags))
+        {
+        case globals::EMoveType::Retract:
+        case globals::EMoveType::Unretract:
+        case globals::EMoveType::Seam:
+        case globals::EMoveType::Tool_change:
+        case globals::EMoveType::Color_change:
+        case globals::EMoveType::Pause_print:
+        case globals::EMoveType::Wipe:
+        {
+            return true;
+        }
+        default:
+        {
+            return false;
+        }
+        }
+    }
 };
+
+const std::array<float, 3> Dummy_Color{ 0.0f, 0.0f, 0.0f };
+
+const std::map<globals::EMoveType, std::array<float, 3>> Option_Colors{ {
+    { globals::EMoveType::Retract,      { 0.803f, 0.135f, 0.839f } },
+    { globals::EMoveType::Unretract,    { 0.287f, 0.679f, 0.810f } },
+    { globals::EMoveType::Seam,         { 0.900f, 0.900f, 0.900f } },
+    { globals::EMoveType::Tool_change,  { 0.758f, 0.744f, 0.389f } },
+    { globals::EMoveType::Color_change, { 0.856f, 0.582f, 0.546f } },
+    { globals::EMoveType::Pause_print,  { 0.322f, 0.942f, 0.512f } },
+    { globals::EMoveType::Custom_GCode, { 0.886f, 0.825f, 0.262f } },
+    { globals::EMoveType::Wipe,         { 1.000f, 1.000f, 0.000f } }
+} };
 
 const std::vector<std::array<float, 3>> Extrusion_Role_Colors{ {
     { 0.90f, 0.70f, 0.70f },   // None
@@ -210,19 +241,16 @@ void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_p
     std::vector<uint32_t> enabled_lines{};
     if (path.enabled_lines_count > 0)
         enabled_lines.reserve(path.enabled_lines_count);
-    for (glm::uint32_t i = sequential_range.get_current_min(); i < sequential_range.get_current_max(); i++) {
-
-        const bool is_travel = path_points[i].is_travel_move();
-        const unsigned int role = path_points[i].role_from_flags();
+    for (uint32_t i = sequential_range.get_current_min(); i < sequential_range.get_current_max(); i++) {
+        const globals::GCodeExtrusionRole role = path_points[i].role_from_flags();
 
         if (!path.valid_lines_bitset[i]) continue;
-
-        if (is_travel) {
+        if (path_points[i].is_travel_move())
             if (!config::travel_paths_visibility) continue;
-        }
-        else {
-            if (!config::extrusion_roles_visibility[(uint8_t)role]) continue;
-        }
+        else if (path_points[i].is_option_move())
+            if (!config::options_visibility[path_points[i].type_from_flags()]) continue;
+        else
+            if (!config::extrusion_roles_visibility[role]) continue;
 
         enabled_lines.push_back(i);
     }
@@ -241,9 +269,11 @@ void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_p
 void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &path_points)
 {
     auto select_color = [](const PathPoint& p) {
-        static const std::array<float, 3> error_color = { 0.5f, 0.5f, 0.5f };
-        const unsigned int role = extract_role_from_flags(p.flags);
-        const unsigned int type = extract_type_from_flags(p.flags);
+        const unsigned int role = (unsigned int)globals::extract_role_from_flags(p.flags);
+        const globals::EMoveType type = globals::extract_type_from_flags(p.flags);
+        if (type != globals::EMoveType::Travel && type != globals::EMoveType::Extrude)
+            return Option_Colors.at(type);
+
         switch (config::visualization_type)
         {
         // feature type
@@ -292,7 +322,7 @@ void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &pa
         }
         }
 
-        return error_color;
+        return Dummy_Color;
     };
 
     auto format_color = [&](const PathPoint& p) {
@@ -333,7 +363,8 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
         const bool this_line_valid = i + 1 < path_points.size() &&
             path_points[i + 1].position != path_points[i].position &&
-            path_points[i + 1].type_from_flags() == path_points[i].type_from_flags();
+            path_points[i + 1].type_from_flags() == path_points[i].type_from_flags() &&
+            path_points[i].type_from_flags() != globals::EMoveType::Seam;
         const glm::vec3 this_line = this_line_valid ? (path_points[i + 1].position - path_points[i].position) : glm::vec3(0);
 
         if (this_line_valid) {

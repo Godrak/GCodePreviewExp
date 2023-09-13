@@ -61,6 +61,54 @@ namespace globals {
 				return std::string();
 		}
 
+		GCodeExtrusionRole extract_role_from_flags(unsigned int flags) {
+				const unsigned int value = flags & 0xFF;
+				assert(value < (unsigned int)GCodeExtrusionRole::Count);
+				return (GCodeExtrusionRole)value;
+		}
+
+		enum class EMoveType : uint8_t
+		{
+				Noop,
+				Retract,
+				Unretract,
+				Seam,
+				Tool_change,
+				Color_change,
+				Pause_print,
+				Custom_GCode,
+				Travel,
+				Wipe,
+				Extrude,
+				// Stopper to count number of enums.
+				Count
+		};
+
+		std::string gcode_move_type_to_string(EMoveType type)
+		{
+				switch (type) {
+				case EMoveType::Noop:					return "Noop";
+				case EMoveType::Retract:			return "Retract";
+				case EMoveType::Unretract:	  return "Unretract";
+				case EMoveType::Seam:				  return "Seam";
+				case EMoveType::Tool_change:	return "Tool change";
+				case EMoveType::Color_change: return "Color change";
+				case EMoveType::Pause_print:	return "Pause print";
+				case EMoveType::Custom_GCode:	return "Custom GCode";
+				case EMoveType::Travel:				return "Travel";
+				case EMoveType::Wipe:					return "Wipe";
+				case EMoveType::Extrude:			return "Extrude";
+				default:											assert(false);
+				}
+				return std::string();
+		}
+
+		EMoveType extract_type_from_flags(unsigned int flags) {
+				const unsigned int value = (flags >> 8) & 0xFF;
+				assert(value < (unsigned int)EMoveType::Count);
+				return (EMoveType)value;
+		}
+
 		struct Statistics
 		{
 				size_t total_moves{ 0 };
@@ -103,22 +151,32 @@ bool camera_center_required = true;
 bool use_travel_moves_data = true;
 bool window_minimized = false;
 bool force_full_model_render = false;
-std::map<uint8_t, bool> extrusion_roles_visibility{{
-		{ (uint8_t)globals::GCodeExtrusionRole::None, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::Perimeter, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::ExternalPerimeter, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::OverhangPerimeter, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::InternalInfill, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::SolidInfill, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::TopSolidInfill, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::Ironing, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::BridgeInfill, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::GapFill, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::Skirt, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::SupportMaterial, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::SupportMaterialInterface, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::WipeTower, true },
-		{ (uint8_t)globals::GCodeExtrusionRole::Custom, true }
+std::map<globals::GCodeExtrusionRole, bool> extrusion_roles_visibility{{
+		{ globals::GCodeExtrusionRole::None, true },
+		{ globals::GCodeExtrusionRole::Perimeter, true },
+		{ globals::GCodeExtrusionRole::ExternalPerimeter, true },
+		{ globals::GCodeExtrusionRole::OverhangPerimeter, true },
+		{ globals::GCodeExtrusionRole::InternalInfill, true },
+		{ globals::GCodeExtrusionRole::SolidInfill, true },
+		{ globals::GCodeExtrusionRole::TopSolidInfill, true },
+		{ globals::GCodeExtrusionRole::Ironing, true },
+		{ globals::GCodeExtrusionRole::BridgeInfill, true },
+		{ globals::GCodeExtrusionRole::GapFill, true },
+		{ globals::GCodeExtrusionRole::Skirt, true },
+		{ globals::GCodeExtrusionRole::SupportMaterial, true },
+		{ globals::GCodeExtrusionRole::SupportMaterialInterface, true },
+		{ globals::GCodeExtrusionRole::WipeTower, true },
+		{ globals::GCodeExtrusionRole::Custom, true }
+}};
+std::map<globals::EMoveType, bool> options_visibility{{
+		{ globals::EMoveType::Retract, true },
+		{ globals::EMoveType::Unretract, true },
+		{ globals::EMoveType::Seam, true },
+		{ globals::EMoveType::Tool_change, true },
+		{ globals::EMoveType::Color_change, true },
+		{ globals::EMoveType::Pause_print, true },
+		{ globals::EMoveType::Custom_GCode, true },
+		{ globals::EMoveType::Wipe, true }
 }};
 bool travel_paths_visibility{ true };
 bool enabled_paths_update_required = true;
