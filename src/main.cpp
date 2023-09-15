@@ -250,8 +250,6 @@ static std::vector<gcode::PathPoint> readPathPoints(const std::string& filename)
     file.read(reinterpret_cast<char *>(&size), sizeof(size));
     pathPoints.resize(size);
 
-//    std::map<globals::EMoveType, size_t> types_counters;
-
     // Read each PathPoint object from the file
     static const float travel_radius = 0.05f;
     static const float wipes_radius = 0.15f;
@@ -268,11 +266,20 @@ static std::vector<gcode::PathPoint> readPathPoints(const std::string& filename)
             point.height = wipes_radius;
         }
 
-//        const globals::EMoveType type = globals::extract_type_from_flags(point.flags);
-//        auto it = types_counters.find(type);
-//        if (it == types_counters.end())
-//            it = types_counters.insert({ type, 0 }).first;
-//        it->second++;
+        const globals::EMoveType type = globals::extract_type_from_flags(point.flags);
+        if (type == globals::EMoveType::Extrude) {
+            const globals::GCodeExtrusionRole role = globals::extract_role_from_flags(point.flags);
+            auto it = config::roles_counters.find(role);
+            if (it == config::roles_counters.end())
+                it = config::roles_counters.insert({ role, 0 }).first;
+            it->second++;
+        }
+        else {
+            auto it = config::option_counters.find(type);
+            if (it == config::option_counters.end())
+                it = config::option_counters.insert({ type, 0 }).first;
+            it->second++;
+        }
     }
 
     file.close();
@@ -420,20 +427,24 @@ void show_extrusion_roles()
     ImGui::Begin("##extrusion_roles", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
 
     auto append_extrusion_role_checkbox = [](globals::GCodeExtrusionRole role) {
-        bool& value = config::extrusion_roles_visibility[role];
-        if (ImGui::Checkbox(globals::gcode_extrusion_role_to_string(role).c_str(), &value)) {
-            config::enabled_paths_update_required = true;
-            if (role == globals::GCodeExtrusionRole::Custom) {
-                if (config::visualization_type == 2 /*Width*/ ||
-                    config::visualization_type == 6 /*Volumetric flow rate*/)
-                  config::ranges_update_required = true;
-                  config::color_update_required = true;
+        if (config::roles_counters.find(role) != config::roles_counters.end()) {
+            bool& value = config::extrusion_roles_visibility[role];
+            if (ImGui::Checkbox(globals::gcode_extrusion_role_to_string(role).c_str(), &value)) {
+                config::enabled_paths_update_required = true;
+                if (role == globals::GCodeExtrusionRole::Custom) {
+                    if (config::visualization_type == 2 /*Width*/ ||
+                        config::visualization_type == 6 /*Volumetric flow rate*/)
+                        config::ranges_update_required = true;
+                    config::color_update_required = true;
+                }
             }
         }
     };
     auto append_option_checkbox = [](globals::EMoveType type) {
-        bool& value = config::options_visibility[type];
-        if (ImGui::Checkbox(globals::gcode_move_type_to_string(type).c_str(), &value)) { config::enabled_paths_update_required = true; }
+        if (config::option_counters.find(type) != config::option_counters.end()) {
+            bool& value = config::options_visibility[type];
+            if (ImGui::Checkbox(globals::gcode_move_type_to_string(type).c_str(), &value)) { config::enabled_paths_update_required = true; }
+        }
     };
 
     ImGui::Text("Extrusion roles");
@@ -459,6 +470,7 @@ void show_extrusion_roles()
         config::ranges_update_required = true;
         config::color_update_required = true;
     }
+
     append_option_checkbox(globals::EMoveType::Retract);
     append_option_checkbox(globals::EMoveType::Unretract);
     append_option_checkbox(globals::EMoveType::Seam);
@@ -594,9 +606,8 @@ void render(gcode::BufferedPath &path)
     glm::ivec2 new_size;
     glfwGetFramebufferSize(glfwContext::window, &new_size.x, &new_size.y);
     checkGl();
-    if (new_size != globals::screenResolution) {
-        globals::screenResolution     = new_size;
-    }
+    if (new_size != globals::screenResolution)
+        globals::screenResolution = new_size;
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     checkGl();
@@ -644,13 +655,17 @@ void render(gcode::BufferedPath &path)
 
     const int vp_id = ::glGetUniformLocation(shaderProgram::gcode_program, "view_projection");
     assert(vp_id >= 0);
+#if !ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     const int camera_forward_id = ::glGetUniformLocation(shaderProgram::gcode_program, "camera_forward");
     assert(camera_forward_id >= 0);
+#endif // !ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 
     auto view_projection = glfwContext::camera.get_view_projection();
     glUniformMatrix4fv(vp_id, 1, GL_FALSE, glm::value_ptr(view_projection));
+#if !ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     auto camera_forward = glfwContext::camera.forward;
     glUniform3fv(camera_forward_id, 1, glm::value_ptr(camera_forward));
+#endif // !ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     checkGl();
 
     if (path.enabled_lines_count > 0)
@@ -826,7 +841,7 @@ int main(int argc, char *argv[])
             config::color_update_required = false;
         }
 
-         if (config::enabled_paths_update_required) {
+        if (config::enabled_paths_update_required) {
             gcode::updateEnabledLines(path, points);
             config::enabled_paths_update_required = false;
         }

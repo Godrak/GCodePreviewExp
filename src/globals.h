@@ -13,6 +13,8 @@
 #include <map>
 #include "bitset"
 
+#define ENABLE_ALTERNATE_SEGMENT_GEOMETRY 1
+
 namespace globals {
 		glm::ivec2 screenResolution = {512,512};
 
@@ -176,6 +178,8 @@ std::map<globals::EMoveType, bool> options_visibility{{
 		{ globals::EMoveType::Custom_GCode, true },
 		{ globals::EMoveType::Wipe, true }
 }};
+std::map<globals::GCodeExtrusionRole, size_t> roles_counters;
+std::map<globals::EMoveType, size_t> option_counters;
 bool travel_paths_visibility{ true };
 bool enabled_paths_update_required = true;
 

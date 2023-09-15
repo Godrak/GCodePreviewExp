@@ -211,6 +211,7 @@ xcopy "$(SolutionDir)../../gcode_shaders/*" "$(OutDir)../../gcode_shaders" /i /e
   <ItemGroup>
     <None Include="..\..\gcode_shaders\f_shader.glsl" />
     <None Include="..\..\gcode_shaders\v_shader.glsl" />
+    <None Include="..\..\gcode_shaders\v_shader_mod.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -111,5 +111,8 @@
     <None Include="..\..\gcode_shaders\v_shader.glsl">
       <Filter>shaders</Filter>
     </None>
+    <None Include="..\..\gcode_shaders\v_shader_mod.glsl">
+      <Filter>shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

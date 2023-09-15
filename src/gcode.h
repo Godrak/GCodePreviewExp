@@ -25,6 +25,33 @@ GLuint gcodeVAO, vertexBuffer;
 
 GLint vid_loc = 0;
 
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+// see:
+// doc/1.png
+// doc/2.png
+// doc/3.png
+// for a visual description of vertices
+const std::vector<uint8_t> vertex_data = {
+    1, 6, 7, // stem
+    1, 7, 2, // stem
+    2, 7, 8, // stem 
+    2, 8, 3, // stem 
+    3, 8, 9, // stem 
+    3, 9, 4, // stem 
+    4, 9, 6, // stem
+    4, 6, 1, // stem
+
+    0, 1, 2, // cap 1
+    0, 2, 3, // cap 1
+    0, 3, 4, // cap 1
+    0, 4, 1, // cap 1
+
+    5, 8, 7, // cap 2
+    5, 7, 6, // cap 2
+    5, 6, 9, // cap 2
+    5, 9, 8, // cap 2
+};
+#else
 //     /1-------6\    
 //    / |       | \  
 //   2--0-------5--7
@@ -40,6 +67,7 @@ const std::vector<uint8_t> vertex_data = {
     5, 4, 7, // back spike
     5, 7, 6, // back spike
 };
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 
 struct PathPoint
 {
@@ -266,12 +294,14 @@ void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_p
     globals::statistics.enabled_lines = enabled_lines.size();
     globals::statistics.enabled_lines_size = enabled_lines.size() * sizeof(uint32_t);
 
-    if (!enabled_lines.empty()) {
-        glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_lines_buffer);
-        // buffer data to the buffer
+    glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_lines_buffer);
+    // buffer data to the buffer
+    if (!enabled_lines.empty())
         glBufferData(GL_TEXTURE_BUFFER, enabled_lines.size() * sizeof(uint32_t), enabled_lines.data(), GL_STATIC_DRAW);
-        path.enabled_lines_count = enabled_lines.size();
-    }
+    else
+        glBufferData(GL_TEXTURE_BUFFER, 0, nullptr, GL_STATIC_DRAW);
+
+    path.enabled_lines_count = enabled_lines.size();
 }
 
 void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &path_points)
@@ -384,7 +414,17 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
         const PathPoint &p = path_points[i];
         positions.push_back(p.position);
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+        float angle;
+        if (!prev_line_valid)
+            angle = glm::pi<float>();
+        else if (!this_line_valid)
+            angle = 0.0f;
+        else
+            angle = atan2(prev_line.x * this_line.y - prev_line.y * this_line.x, glm::dot(prev_line, this_line));
+#else
         const float angle = atan2(prev_line.x * this_line.y - prev_line.y * this_line.x, glm::dot(prev_line, this_line));
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
         height_width_angle.push_back({ p.height, p.width, angle });
     }
 

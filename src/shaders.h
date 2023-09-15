@@ -14,7 +14,7 @@ GLuint visibility_v_shader, visibility_f_shader, visibility_program;
 
 GLuint cheap_v_shader, cheap_f_shader, cheap_program;
 
-bool check_shader(std::string source, GLuint id, GLenum st) {
+bool check_shader(const std::string& source, GLuint id, GLenum st) {
 	GLint logLength;
 	glGetShaderiv(id, GL_INFO_LOG_LENGTH, &logLength);
 	if (logLength > 2) {
@@ -64,10 +64,12 @@ void loadAndCompileShader(const std::string& source, GLuint& destination, GLenum
 static const std::string shaders_path = USE_HARDCODED_PATHS;
 
 void createGCodeProgram() {
-	loadAndCompileShader(shaders_path + "gcode_shaders/v_shader.glsl", gcode_v_shader,
-	GL_VERTEX_SHADER);
-	loadAndCompileShader(shaders_path + "gcode_shaders/f_shader.glsl", gcode_f_shader,
-	GL_FRAGMENT_SHADER);
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+	loadAndCompileShader(shaders_path + "gcode_shaders/v_shader_mod.glsl", gcode_v_shader, GL_VERTEX_SHADER);
+#else
+	loadAndCompileShader(shaders_path + "gcode_shaders/v_shader.glsl", gcode_v_shader, GL_VERTEX_SHADER);
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+	loadAndCompileShader(shaders_path + "gcode_shaders/f_shader.glsl", gcode_f_shader, GL_FRAGMENT_SHADER);
 
 	gcode_program = glCreateProgram();
 	glAttachShader(gcode_program, gcode_v_shader);
