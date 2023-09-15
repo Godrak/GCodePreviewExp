@@ -13,6 +13,7 @@
 #include <map>
 #include "bitset"
 
+// When ENABLE_ALTERNATE_SEGMENT_GEOMETRY is set to 1 -> use the .gc whose filename name ends with "_ex"
 #define ENABLE_ALTERNATE_SEGMENT_GEOMETRY 1
 
 namespace globals {
@@ -119,9 +120,17 @@ namespace globals {
 				size_t enabled_lines_size{ 0 };
 				size_t colors_size{ 0 };
 				size_t positions_size{ 0 };
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+				size_t height_width_size{ 0 };
+#else
 				size_t height_width_angle_size{ 0 };
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 				size_t vertex_data_size{ 0 };
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+				size_t buffers_size() const { return enabled_lines_size + colors_size + positions_size + height_width_size + vertex_data_size; }
+#else
 				size_t buffers_size() const { return enabled_lines_size + colors_size + positions_size + height_width_angle_size + vertex_data_size; }
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 		};
 
 		Statistics statistics;

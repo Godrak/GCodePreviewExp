@@ -530,7 +530,11 @@ void show_statistics()
         add_memsize_row("Enabled lines buffer", globals::statistics.enabled_lines_size);
         add_memsize_row("Colors buffer", globals::statistics.colors_size);
         add_memsize_row("Positions buffer", globals::statistics.positions_size);
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+        add_memsize_row("HW buffer", globals::statistics.height_width_size);
+#else
         add_memsize_row("HWA buffer", globals::statistics.height_width_angle_size);
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
         add_memsize_row("Vertex data buffer", globals::statistics.vertex_data_size);
         add_memsize_row("Total buffers", globals::statistics.buffers_size());
         ImGui::EndTable();
@@ -624,15 +628,24 @@ void render(gcode::BufferedPath &path)
 
     const int positions_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "positionsTex");
     assert(positions_tex_id >= 0);
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+    const int height_width_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthTex");
+    assert(height_width_tex_id >= 0);
+#else
     const int height_width_angle_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthAngleTex");
     assert(height_width_angle_tex_id >= 0);
-     const int colors_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "colorsTex");
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+    const int colors_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "colorsTex");
     assert(colors_tex_id >= 0);
     const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "segmentIndexTex");
     assert(segment_index_tex_id >= 0);
 
     glUniform1i(positions_tex_id, 0);
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+    glUniform1i(height_width_tex_id, 1);
+#else
     glUniform1i(height_width_angle_tex_id, 1);
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     glUniform1i(colors_tex_id, 2);
     glUniform1i(segment_index_tex_id, 3);
     checkGl();
@@ -642,8 +655,13 @@ void render(gcode::BufferedPath &path)
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
 
     glActiveTexture(GL_TEXTURE1);
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+    glBindTexture(GL_TEXTURE_BUFFER, path.height_width_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, path.height_width_buffer);
+#else
     glBindTexture(GL_TEXTURE_BUFFER, path.height_width_angle_texture);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_angle_buffer);
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_BUFFER, path.color_texture);

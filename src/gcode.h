@@ -263,7 +263,11 @@ void set_ranges(const std::vector<PathPoint>& path_points)
 struct BufferedPath
 {
     GLuint                             positions_texture, positions_buffer;
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+    GLuint                             height_width_texture, height_width_buffer;
+#else
     GLuint                             height_width_angle_texture, height_width_angle_buffer;
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     GLuint                             color_texture, color_buffer;
     GLuint                             enabled_lines_texture, enabled_lines_buffer;
     size_t                             enabled_lines_count{ 0 };
@@ -390,7 +394,11 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     BufferedPath result;
 
     std::vector<glm::vec3> positions;
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+    std::vector<glm::vec2> height_width;
+#else
     std::vector<glm::vec3> height_width_angle;
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 
     result.valid_lines_bitset = bitset::BitSet<>(path_points.size());
     result.valid_lines_bitset.setAll();
@@ -415,23 +423,22 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
         const PathPoint &p = path_points[i];
         positions.push_back(p.position);
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
-        float angle;
-        if (!prev_line_valid)
-            angle = glm::pi<float>();
-        else if (!this_line_valid)
-            angle = 0.0f;
-        else
-            angle = atan2(prev_line.x * this_line.y - prev_line.y * this_line.x, glm::dot(prev_line, this_line));
+        const bool is_endpoint = !prev_line_valid || !this_line_valid;
+        height_width.push_back({ is_endpoint ? -p.height : p.height, is_endpoint ? -p.width : p.width });
 #else
         const float angle = atan2(prev_line.x * this_line.y - prev_line.y * this_line.x, glm::dot(prev_line, this_line));
-#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
         height_width_angle.push_back({ p.height, p.width, angle });
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     }
 
     result.total_points_count = path_points.size();
 
     globals::statistics.positions_size = positions.size() * sizeof(glm::vec3);
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+    globals::statistics.height_width_size = height_width.size() * sizeof(glm::vec2);
+#else
     globals::statistics.height_width_angle_size = height_width_angle.size() * sizeof(glm::vec3);
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 
     ///GCODE DATA
     glBindVertexArray(gcodeVAO);
@@ -454,10 +461,25 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
      // Create a buffer object and bind it to the texture buffer
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+    glGenBuffers(1, &result.height_width_buffer);
+    glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_buffer);
+#else
     glGenBuffers(1, &result.height_width_angle_buffer);
     glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_angle_buffer);
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 
     // buffer data to the buffer
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+    glBufferData(GL_TEXTURE_BUFFER, height_width.size() * sizeof(glm::vec2), height_width.data(), GL_STATIC_DRAW);
+
+    // Create and bind the texture
+    glGenTextures(1, &result.height_width_texture);
+    glBindTexture(GL_TEXTURE_BUFFER, result.height_width_texture);
+
+    // Attach the buffer object to the texture buffer
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, result.height_width_buffer);
+#else
     glBufferData(GL_TEXTURE_BUFFER, height_width_angle.size() * sizeof(glm::vec3), height_width_angle.data(), GL_STATIC_DRAW);
 
     // Create and bind the texture
@@ -466,6 +488,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
     // Attach the buffer object to the texture buffer
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, result.height_width_angle_buffer);
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 
     // Unbind the buffer object and the texture buffer
     glBindBuffer(GL_TEXTURE_BUFFER, 0);

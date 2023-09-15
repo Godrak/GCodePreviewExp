@@ -3,12 +3,11 @@
 #define PI      3.1415926538
 #define HALF_PI (0.5 * PI)
 #define UP      vec3(0.0, 0.0, 1.0)
-#define EPSILON 0.001
 
 uniform mat4 view_projection;
 
 uniform samplerBuffer positionsTex;
-uniform samplerBuffer heightWidthAngleTex;
+uniform samplerBuffer heightWidthTex;
 uniform samplerBuffer colorsTex;
 uniform isamplerBuffer segmentIndexTex;
 
@@ -71,8 +70,8 @@ void main() {
 
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
     vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
-    vec3 hwa_a = texelFetch(heightWidthAngleTex, id_a).xyz;
-    vec3 hwa_b = texelFetch(heightWidthAngleTex, id_b).xyz;
+    vec2 hwa_a = texelFetch(heightWidthTex, id_a).xy;
+    vec2 hwa_b = texelFetch(heightWidthTex, id_b).xy;
 
     // direction of the line in world space
 	vec3 line_dir = normalize(pos_b - pos_a);
@@ -89,17 +88,18 @@ void main() {
     // no need to normalize, the two vectors are already normalized and form a 90 degrees angle
     vec3 up_dir = cross(right_dir, line_dir);
 
-	float half_h_a = 0.5 * hwa_a.x;
-	float half_w_a = 0.5 * hwa_a.y;
-	float half_h_b = 0.5 * hwa_b.x;
-	float half_w_b = 0.5 * hwa_b.y;
+	float half_h_a = 0.5 * abs(hwa_a.x);
+	float half_w_a = 0.5 * abs(hwa_a.y);
+	float half_h_b = 0.5 * abs(hwa_b.x);
+	float half_w_b = 0.5 * abs(hwa_b.y);
 	
 	vec3 position = vec3(0.0);
     vec3 normal = vec3(2.0); // dummy value
 	
 	// calculate output position in dependence of vertex id
 	if (vertex_id == 0) {
-		if (abs(hwa_a.z - PI) < EPSILON) {
+		if (hwa_a.x < 0.0) {
+			// negative value for width and height means endpoint
 			position = pos_a;
 			normal = -line_dir;
 		}
@@ -111,7 +111,8 @@ void main() {
 	else if (vertex_id == 3) { position = pos_a - half_w_a * right_dir; }
 	else if (vertex_id == 4) { position = pos_a - half_h_a * up_dir; }
 	else if (vertex_id == 5) {
-		if (abs(hwa_b.z) < EPSILON) {
+		if (hwa_b.x < 0.0) {
+			// negative value for width and height means endpoint
 			position = pos_b;
 			normal = line_dir;
 		}
