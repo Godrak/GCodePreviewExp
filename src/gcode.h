@@ -367,7 +367,7 @@ void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &pa
         return Dummy_Color;
     };
 
-    auto format_color = [&](const PathPoint& p) {
+    auto encode_color = [select_color](const PathPoint& p) {
         const std::array<float, 3> color = select_color(p);
         const int r = (int)(255.0f * color[0]);
         const int g = (int)(255.0f * color[1]);
@@ -378,7 +378,7 @@ void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &pa
 
     std::vector<float> colors(path_points.size());
     for (size_t i = 0; i < path_points.size(); i++) {
-        colors[i] = format_color(path_points[i]);
+        colors[i] = encode_color(path_points[i]);
     }
 
     globals::statistics.colors_size = colors.size() * sizeof(float);
@@ -404,6 +404,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     result.valid_lines_bitset.setAll();
 
     for (size_t i = 0; i < path_points.size(); i++) {
+      const PathPoint& p = path_points[i];
         const bool prev_line_valid = i > 0 && result.valid_lines_bitset[i - 1];
         const glm::vec3 prev_line = prev_line_valid ? (path_points[i].position - path_points[i - 1].position) : glm::vec3(0);
 
@@ -415,16 +416,17 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
         if (this_line_valid) {
             // there is a valid path between point i and i+1.
-        } else {
+        }
+        else {
             // the connection is invalid, there should be no line rendered, ever
             result.valid_lines_bitset.reset(i);
         }
 
-        const PathPoint &p = path_points[i];
-        positions.push_back(p.position);
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
         const bool is_endpoint = !prev_line_valid || !this_line_valid;
-        height_width.push_back({ is_endpoint ? -p.height : p.height, is_endpoint ? -p.width : p.width });
+        // encode endpoints by using negative z
+        positions.push_back({ p.position.x, p.position.y, is_endpoint ? -p.position.z : p.position.z});
+        height_width.push_back({ p.height, p.width });
 #else
         const float angle = atan2(prev_line.x * this_line.y - prev_line.y * this_line.x, glm::dot(prev_line, this_line));
         height_width_angle.push_back({ p.height, p.width, angle });

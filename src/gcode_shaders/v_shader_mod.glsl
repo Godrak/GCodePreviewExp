@@ -1,7 +1,7 @@
 #version 150
 
-#define PI      3.1415926538
-#define HALF_PI (0.5 * PI)
+#define PI             3.1415926536
+#define MINUS_HALF_PI -1.5707963268
 #define UP      vec3(0.0, 0.0, 1.0)
 
 uniform mat4 view_projection;
@@ -10,16 +10,6 @@ uniform samplerBuffer positionsTex;
 uniform samplerBuffer heightWidthTex;
 uniform samplerBuffer colorsTex;
 uniform isamplerBuffer segmentIndexTex;
-
-vec3 decode_color(float color)
-{
-	int c = int(round(color));
-	int r = (c >> 16) & 0xFF;
-	int g = (c >> 8) & 0xFF;
-	int b = (c >> 0) & 0xFF;
-	float f = 1.0 / 255.0f;
-    return f * vec3(r, g, b);
-}
 
 in int vertex_id;
 
@@ -35,6 +25,16 @@ const float light_front_diffuse = 0.6*0.3;
 
 const float ambient = 0.3;
 const float emission = 0.1;
+
+vec3 decode_color(float color)
+{
+	int c = int(round(color));
+	int r = (c >> 16) & 0xFF;
+	int g = (c >> 8) & 0xFF;
+	int b = (c >> 0) & 0xFF;
+	float f = 1.0 / 255.0f;
+    return f * vec3(r, g, b);
+}
 
 mat3 rotate_matrix(vec3 axis, float angle)
 {
@@ -61,7 +61,7 @@ vec3 calc_position(vec3 a, vec3 b, vec3 c, float half_width)
 {
 	vec3 ab_dir = normalize(b - a);
 	vec3 bc_dir = normalize(c - b);
-	return b + half_width * rotate_matrix(-normalize(cross(ab_dir, bc_dir)), HALF_PI) * normalize(0.5 * (ab_dir + bc_dir));
+	return b + half_width * rotate_matrix(normalize(cross(ab_dir, bc_dir)), MINUS_HALF_PI) * normalize(0.5 * (ab_dir + bc_dir));
 }
 
 void main() {
@@ -70,8 +70,13 @@ void main() {
 
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
     vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
-    vec2 hwa_a = texelFetch(heightWidthTex, id_a).xy;
-    vec2 hwa_b = texelFetch(heightWidthTex, id_b).xy;
+    vec2 half_hw_a = 0.5 * texelFetch(heightWidthTex, id_a).xy;
+    vec2 half_hw_b = 0.5 * texelFetch(heightWidthTex, id_b).xy;
+
+	bool is_endpoint_a = pos_a.z < 0.0;
+	bool is_endpoint_b = pos_b.z < 0.0;
+	pos_a.z = abs(pos_a.z);
+	pos_b.z = abs(pos_b.z);
 
     // direction of the line in world space
 	vec3 line_dir = normalize(pos_b - pos_a);
@@ -87,42 +92,41 @@ void main() {
 
     // no need to normalize, the two vectors are already normalized and form a 90 degrees angle
     vec3 up_dir = cross(right_dir, line_dir);
-
-	float half_h_a = 0.5 * abs(hwa_a.x);
-	float half_w_a = 0.5 * abs(hwa_a.y);
-	float half_h_b = 0.5 * abs(hwa_b.x);
-	float half_w_b = 0.5 * abs(hwa_b.y);
 	
 	vec3 position = vec3(0.0);
     vec3 normal = vec3(2.0); // dummy value
 	
 	// calculate output position in dependence of vertex id
 	if (vertex_id == 0) {
-		if (hwa_a.x < 0.0) {
-			// negative value for width and height means endpoint
+		if (is_endpoint_a) {
 			position = pos_a;
 			normal = -line_dir;
 		}
-		else
-			position = calc_position(texelFetch(positionsTex, id_a - 1).xyz, pos_a, pos_b, half_w_a);
+		else {
+			vec3 pos_c = texelFetch(positionsTex, id_a - 1).xyz;
+			pos_c.z = abs(pos_c.z);
+			position = calc_position(pos_c, pos_a, pos_b, half_hw_a.y);
+		}
 	}
-	else if (vertex_id == 1) { position = pos_a + half_w_a * right_dir; }
-	else if (vertex_id == 2) { position = pos_a + half_h_a * up_dir; }
-	else if (vertex_id == 3) { position = pos_a - half_w_a * right_dir; }
-	else if (vertex_id == 4) { position = pos_a - half_h_a * up_dir; }
+	else if (vertex_id == 1) { position = pos_a + half_hw_a.y * right_dir; }
+	else if (vertex_id == 2) { position = pos_a + half_hw_a.x * up_dir; }
+	else if (vertex_id == 3) { position = pos_a - half_hw_a.y * right_dir; }
+	else if (vertex_id == 4) { position = pos_a - half_hw_a.x * up_dir; }
 	else if (vertex_id == 5) {
-		if (hwa_b.x < 0.0) {
-			// negative value for width and height means endpoint
+		if (is_endpoint_b) {
 			position = pos_b;
 			normal = line_dir;
 		}
-		else
-			position = calc_position(pos_a, pos_b, texelFetch(positionsTex, id_b + 1).xyz, half_w_b);
+		else {
+			vec3 pos_c = texelFetch(positionsTex, id_b + 1).xyz;
+			pos_c.z = abs(pos_c.z);
+			position = calc_position(pos_a, pos_b, pos_c, half_hw_b.y);
+		}
 	}
-	else if (vertex_id == 6) { position = pos_b + half_w_b * right_dir; }
-	else if (vertex_id == 7) { position = pos_b + half_h_b * up_dir; }
-	else if (vertex_id == 8) { position = pos_b - half_w_b * right_dir; }
-	else if (vertex_id == 9) { position = pos_b - half_h_b * up_dir; }
+	else if (vertex_id == 6) { position = pos_b + half_hw_b.y * right_dir; }
+	else if (vertex_id == 7) { position = pos_b + half_hw_b.x * up_dir; }
+	else if (vertex_id == 8) { position = pos_b - half_hw_b.y * right_dir; }
+	else if (vertex_id == 9) { position = pos_b - half_hw_b.x * up_dir; }
 
 	if (normal.x == 2.0)
 		normal = (vertex_id < 5) ? normalize(position - pos_a) : normalize(position - pos_b);
