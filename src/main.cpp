@@ -386,9 +386,20 @@ void show_sequential_sliders(const std::vector<gcode::PathPoint>& path_points)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##sequential", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
 
-    const gcode::PathPoint& curr_point = path_points[sequential_range.get_current_max() - 1];
-    const glm::vec3 curr_pos(curr_point.position.x, curr_point.position.y, curr_point.is_extrude_move() ? curr_point.position.z + 0.5f * curr_point.height : curr_point.position.z);
-    ImGui::Text("Tool position: %.3f, %.3f, %.3f", curr_pos.x, curr_pos.y, curr_pos.z);
+    if (sequential_range.get_current_max() < path_points.size()) {
+        const gcode::PathPoint& curr_point = path_points[sequential_range.get_current_max()];
+        const globals::EMoveType type = curr_point.type_from_flags();
+        const globals::GCodeExtrusionRole role = curr_point.role_from_flags();
+        if (type == globals::EMoveType::Extrude) {
+            const glm::vec3 curr_pos(curr_point.position.x, curr_point.position.y, curr_point.position.z + 0.5f * curr_point.height);
+            ImGui::Text("Tool position: %.3f, %.3f, %.3f [%s] Width: %.3f - Height: %.3f",
+                curr_pos.x, curr_pos.y, curr_pos.z, globals::gcode_extrusion_role_to_string(role).c_str(), curr_point.width, curr_point.height);
+        }
+        else {
+            ImGui::Text("Tool position: %.3f, %.3f, %.3f [%s]",
+                curr_point.position.x, curr_point.position.y, curr_point.position.z, globals::gcode_move_type_to_string(type).c_str());
+        }
+    }
 
     const int global_min = (int)sequential_range.get_global_min();
     const int global_max = (int)sequential_range.get_global_max();
