@@ -9,7 +9,9 @@
 uniform mat4 view_projection;
 
 uniform samplerBuffer positionsTex;
+#if !ENABLE_PACKED_FLOATS
 uniform samplerBuffer heightWidthTex;
+#endif // !ENABLE_PACKED_FLOATS
 uniform samplerBuffer colorsTex;
 uniform isamplerBuffer segmentIndexTex;
 
@@ -86,16 +88,20 @@ void main() {
     int id_a = texelFetch(segmentIndexTex, gl_InstanceID).r;
     int id_b = id_a + 1;
 
-    vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
-    vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
 #if ENABLE_PACKED_FLOATS
+    vec4 a = texelFetch(positionsTex, id_a);
+    vec4 b = texelFetch(positionsTex, id_b);
+    vec3 pos_a = a.xyz;
+    vec3 pos_b = b.xyz;
 	bool is_endpoint_a = pos_a.z < 0.0;
 	bool is_endpoint_b = pos_b.z < 0.0;
 	pos_a.z = abs(pos_a.z);
 	pos_b.z = abs(pos_b.z);
-	vec2 half_hw_a = decode_hw(texelFetch(heightWidthTex, id_a).r);
-	vec2 half_hw_b = decode_hw(texelFetch(heightWidthTex, id_b).r);
+	vec2 half_hw_a = decode_hw(a.w);
+	vec2 half_hw_b = decode_hw(b.w);
 #else
+    vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
+    vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
     vec2 hw_a = texelFetch(heightWidthTex, id_a).xy;
     vec2 hw_b = texelFetch(heightWidthTex, id_b).xy;
 #endif // ENABLE_PACKED_FLOATS

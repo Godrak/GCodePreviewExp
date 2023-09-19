@@ -264,7 +264,9 @@ struct BufferedPath
 {
     GLuint                             positions_texture, positions_buffer;
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#if !ENABLE_PACKED_FLOATS
     GLuint                             height_width_texture, height_width_buffer;
+#endif // !ENABLE_PACKED_FLOATS
 #else
     GLuint                             height_width_angle_texture, height_width_angle_buffer;
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
@@ -393,15 +395,17 @@ void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &pa
 BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     BufferedPath result;
 
+#if ENABLE_PACKED_FLOATS
+    std::vector<glm::vec4> positions;
+    std::vector<glm::vec2> height_width;
+#else
     std::vector<glm::vec3> positions;
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     std::vector<glm::vec2> height_width;
-#if ENABLE_PACKED_FLOATS
-    std::vector<float> packed_hw;
-#endif // ENABLE_PACKED_FLOATS
 #else
     std::vector<glm::vec3> height_width_angle;
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#endif // ENABLE_PACKED_FLOATS
 
     result.valid_lines_bitset = bitset::BitSet<>(path_points.size());
     result.valid_lines_bitset.setAll();
@@ -429,13 +433,12 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
 #if ENABLE_PACKED_FLOATS
         const bool is_endpoint = !prev_line_valid || !this_line_valid;
-        // encode endpoints by using negative z
-        positions.push_back({ p.position.x, p.position.y, is_endpoint ? -p.position.z : p.position.z });
-        // if quantized, store half height and half width
+        // store half height and half width
         const float h = 0.5f * p.height;
         const float w = 0.5f * p.width;
+        // encode endpoints by using negative z
+        positions.push_back({ p.position.x, p.position.y, is_endpoint ? -p.position.z : p.position.z, h });
         height_width.push_back({ h, w });
-        packed_hw.push_back(h);
         const globals::EMoveType type = globals::extract_type_from_flags(p.flags);
         if (type == globals::EMoveType::Extrude ||
             type == globals::EMoveType::Wipe ||
@@ -467,26 +470,23 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
         if (type == globals::EMoveType::Extrude ||
             type == globals::EMoveType::Wipe ||
             type == globals::EMoveType::Travel) {
-            glm::vec2& hw = height_width[i];
-            config::height_quantizer.quantize(hw.x);
-            config::width_quantizer.quantize(hw.y);
-            packed_hw[i] = hw.x * QuantizersResolution + hw.y;
-            hw = { hw.x * QuantizersResolution + hw.y, 0.0f };
-//            glm::uvec2 uhw((uint32_t)hw.x, (uint32_t)hw.y);
-//            hw = { uhw.x * QuantizersResolution + uhw.y , 0.0f };
+            const glm::vec2& hw = height_width[i];
+            positions[i].w = config::height_quantizer.quantize(hw.x) * QuantizersResolution + config::width_quantizer.quantize(hw.y);
         }
     }
 #endif // ENABLE_PACKED_FLOATS
 
     result.total_points_count = path_points.size();
 
-    globals::statistics.positions_size = positions.size() * sizeof(glm::vec3);
-#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 #if ENABLE_PACKED_FLOATS
-    globals::statistics.height_width_size = packed_hw.size() * sizeof(float);
+    globals::statistics.positions_size = positions.size() * sizeof(glm::vec4);
 #else
-    globals::statistics.height_width_size = height_width.size() * sizeof(glm::vec2);
+    globals::statistics.positions_size = positions.size() * sizeof(glm::vec3);
 #endif // ENABLE_PACKED_FLOATS
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#if !ENABLE_PACKED_FLOATS
+    globals::statistics.height_width_size = height_width.size() * sizeof(glm::vec2);
+#endif // !ENABLE_PACKED_FLOATS
 #else
     globals::statistics.height_width_angle_size = height_width_angle.size() * sizeof(glm::vec3);
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
@@ -498,19 +498,28 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindBuffer(GL_TEXTURE_BUFFER, result.positions_buffer);
 
     // buffer data to the path buffer
+#if ENABLE_PACKED_FLOATS
+    glBufferData(GL_TEXTURE_BUFFER, positions.size() * sizeof(glm::vec4), positions.data(), GL_STATIC_DRAW);
+#else
     glBufferData(GL_TEXTURE_BUFFER, positions.size() * sizeof(glm::vec3), positions.data(), GL_STATIC_DRAW);
+#endif // ENABLE_PACKED_FLOATS
 
     // Create and bind the path texture
     glGenTextures(1, &result.positions_texture);
     glBindTexture(GL_TEXTURE_BUFFER, result.positions_texture);
 
     // Attach the buffer object to the texture buffer
+#if ENABLE_PACKED_FLOATS
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, result.positions_buffer);
+#else
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, result.positions_buffer);
+#endif // ENABLE_PACKED_FLOATS
 
     // Unbind the buffer object and the texture buffer
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
+#if !ENABLE_PACKED_FLOATS
      // Create a buffer object and bind it to the texture buffer
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     glGenBuffers(1, &result.height_width_buffer);
@@ -522,22 +531,14 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
     // buffer data to the buffer
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
-#if ENABLE_PACKED_FLOATS
-    glBufferData(GL_TEXTURE_BUFFER, packed_hw.size() * sizeof(float), packed_hw.data(), GL_STATIC_DRAW);
-#else
     glBufferData(GL_TEXTURE_BUFFER, height_width.size() * sizeof(glm::vec2), height_width.data(), GL_STATIC_DRAW);
-#endif // ENABLE_PACKED_FLOATS
 
     // Create and bind the texture
     glGenTextures(1, &result.height_width_texture);
     glBindTexture(GL_TEXTURE_BUFFER, result.height_width_texture);
 
     // Attach the buffer object to the texture buffer
-#if ENABLE_PACKED_FLOATS
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, result.height_width_buffer);
-#else
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, result.height_width_buffer);
-#endif // ENABLE_PACKED_FLOATS
 #else
     glBufferData(GL_TEXTURE_BUFFER, height_width_angle.size() * sizeof(glm::vec3), height_width_angle.data(), GL_STATIC_DRAW);
 
@@ -548,6 +549,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     // Attach the buffer object to the texture buffer
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, result.height_width_angle_buffer);
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#endif // !ENABLE_PACKED_FLOATS
 
     // Unbind the buffer object and the texture buffer
     glBindBuffer(GL_TEXTURE_BUFFER, 0);

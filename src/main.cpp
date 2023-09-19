@@ -534,7 +534,9 @@ void show_statistics()
         add_memsize_row("Colors buffer", globals::statistics.colors_size);
         add_memsize_row("Positions buffer", globals::statistics.positions_size);
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#if !ENABLE_PACKED_FLOATS
         add_memsize_row("HW buffer", globals::statistics.height_width_size);
+#endif // !ENABLE_PACKED_FLOATS
 #else
         add_memsize_row("HWA buffer", globals::statistics.height_width_angle_size);
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
@@ -631,6 +633,7 @@ void render(gcode::BufferedPath &path)
 
     const int positions_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "positionsTex");
     assert(positions_tex_id >= 0);
+#if !ENABLE_PACKED_FLOATS
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     const int height_width_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthTex");
     assert(height_width_tex_id >= 0);
@@ -638,12 +641,17 @@ void render(gcode::BufferedPath &path)
     const int height_width_angle_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthAngleTex");
     assert(height_width_angle_tex_id >= 0);
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#endif // !ENABLE_PACKED_FLOATS
     const int colors_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "colorsTex");
     assert(colors_tex_id >= 0);
     const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "segmentIndexTex");
     assert(segment_index_tex_id >= 0);
 
     glUniform1i(positions_tex_id, 0);
+#if ENABLE_PACKED_FLOATS
+    glUniform1i(colors_tex_id, 1);
+    glUniform1i(segment_index_tex_id, 2);
+#else
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     glUniform1i(height_width_tex_id, 1);
 #else
@@ -651,30 +659,39 @@ void render(gcode::BufferedPath &path)
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     glUniform1i(colors_tex_id, 2);
     glUniform1i(segment_index_tex_id, 3);
+#endif // !ENABLE_PACKED_FLOATS
     checkGl();
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_BUFFER, path.positions_texture);
+#if ENABLE_PACKED_FLOATS
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, path.positions_buffer);
+#else
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.positions_buffer);
 
     glActiveTexture(GL_TEXTURE1);
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     glBindTexture(GL_TEXTURE_BUFFER, path.height_width_texture);
-#if ENABLE_PACKED_FLOATS
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, path.height_width_buffer);
-#else
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, path.height_width_buffer);
-#endif // ENABLE_PACKED_FLOATS
 #else
     glBindTexture(GL_TEXTURE_BUFFER, path.height_width_angle_texture);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_angle_buffer);
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#endif // ENABLE_PACKED_FLOATS
 
+#if ENABLE_PACKED_FLOATS
+    glActiveTexture(GL_TEXTURE1);
+#else
     glActiveTexture(GL_TEXTURE2);
+#endif // ENABLE_PACKED_FLOATS
     glBindTexture(GL_TEXTURE_BUFFER, path.color_texture);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, path.color_buffer);
 
+#if ENABLE_PACKED_FLOATS
+    glActiveTexture(GL_TEXTURE2);
+#else
     glActiveTexture(GL_TEXTURE3);
+#endif // ENABLE_PACKED_FLOATS
     glBindTexture(GL_TEXTURE_BUFFER, path.enabled_lines_texture);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, path.enabled_lines_buffer);
 

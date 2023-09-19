@@ -126,13 +126,19 @@ namespace globals {
 				size_t colors_size{ 0 };
 				size_t positions_size{ 0 };
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#if !ENABLE_PACKED_FLOATS
 				size_t height_width_size{ 0 };
+#endif // !ENABLE_PACKED_FLOATS
 #else
 				size_t height_width_angle_size{ 0 };
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 				size_t vertex_data_size{ 0 };
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#if ENABLE_PACKED_FLOATS
+				size_t buffers_size() const { return enabled_lines_size + colors_size + positions_size + vertex_data_size; }
+#else
 				size_t buffers_size() const { return enabled_lines_size + colors_size + positions_size + height_width_size + vertex_data_size; }
+#endif // ENABLE_PACKED_FLOATS
 #else
 				size_t buffers_size() const { return enabled_lines_size + colors_size + positions_size + height_width_angle_size + vertex_data_size; }
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
@@ -168,7 +174,7 @@ namespace globals {
 						m_min = std::min(m_min, value);
 						m_max = std::max(m_max, value);
 				}
-				void quantize(float& value) const { value = std::floor((value - m_min) / step()); }
+				float quantize(float value) const { return std::floor((value - m_min) / step()); }
 
 		private:
 				float m_min{ FLT_MAX };
