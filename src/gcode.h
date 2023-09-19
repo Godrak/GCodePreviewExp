@@ -411,9 +411,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     result.valid_lines_bitset.setAll();
 
     for (size_t i = 0; i < path_points.size(); i++) {
-#if ENABLE_PACKED_FLOATS
         const PathPoint& p = path_points[i];
-#endif // ENABLE_PACKED_FLOATS
         const bool prev_line_valid = i > 0 && result.valid_lines_bitset[i - 1];
         const glm::vec3 prev_line = prev_line_valid ? (path_points[i].position - path_points[i - 1].position) : glm::vec3(0);
 
@@ -446,15 +444,13 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
             config::height_quantizer.update(h);
             config::width_quantizer.update(w);
         }
-#else
-        const PathPoint& p = path_points[i];
-        positions.push_back(p.position);
 #endif // ENABLE_PACKED_FLOATS
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
 #if !ENABLE_PACKED_FLOATS
         const bool is_endpoint = !prev_line_valid || !this_line_valid;
-        // encode endpoints by using negative height and width
-        height_width.push_back({ is_endpoint ? -p.height : p.height, is_endpoint ? -p.width : p.width });
+        // encode endpoints by using negative z
+        positions.push_back({ p.position.x, p.position.y, is_endpoint ? -p.position.z : p.position.z });
+        height_width.push_back({ p.height, p.width });
 #endif // !ENABLE_PACKED_FLOATS
 #else
         const float angle = atan2(prev_line.x * this_line.y - prev_line.y * this_line.x, glm::dot(prev_line, this_line));

@@ -2,8 +2,8 @@
 
 #define ENABLE_PACKED_FLOATS 1
 
-#define PI      3.1415926538
-#define HALF_PI (0.5 * PI)
+#define PI             3.1415926536
+#define MINUS_HALF_PI -1.5707963268
 #define UP      vec3(0.0, 0.0, 1.0)
 
 uniform mat4 view_projection;
@@ -81,7 +81,7 @@ vec3 calc_position(vec3 a, vec3 b, vec3 c, float half_width)
 {
 	vec3 ab_dir = normalize(b - a);
 	vec3 bc_dir = normalize(c - b);
-	return b + half_width * rotate_matrix(-normalize(cross(ab_dir, bc_dir)), HALF_PI) * normalize(0.5 * (ab_dir + bc_dir));
+	return b + half_width * rotate_matrix(normalize(cross(ab_dir, bc_dir)), MINUS_HALF_PI) * normalize(0.5 * (ab_dir + bc_dir));
 }
 
 void main() {
@@ -93,18 +93,19 @@ void main() {
     vec4 b = texelFetch(positionsTex, id_b);
     vec3 pos_a = a.xyz;
     vec3 pos_b = b.xyz;
-	bool is_endpoint_a = pos_a.z < 0.0;
-	bool is_endpoint_b = pos_b.z < 0.0;
-	pos_a.z = abs(pos_a.z);
-	pos_b.z = abs(pos_b.z);
 	vec2 half_hw_a = decode_hw(a.w);
 	vec2 half_hw_b = decode_hw(b.w);
 #else
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
     vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
-    vec2 hw_a = texelFetch(heightWidthTex, id_a).xy;
-    vec2 hw_b = texelFetch(heightWidthTex, id_b).xy;
+    vec2 half_hw_a = 0.5 * texelFetch(heightWidthTex, id_a).xy;
+    vec2 half_hw_b = 0.5 * texelFetch(heightWidthTex, id_b).xy;
 #endif // ENABLE_PACKED_FLOATS
+
+	bool is_endpoint_a = pos_a.z < 0.0;
+	bool is_endpoint_b = pos_b.z < 0.0;
+	pos_a.z = abs(pos_a.z);
+	pos_b.z = abs(pos_b.z);
 
     // direction of the line in world space
 	vec3 line_dir = normalize(pos_b - pos_a);
@@ -120,45 +121,38 @@ void main() {
 
     // no need to normalize, the two vectors are already normalized and form a 90 degrees angle
     vec3 up_dir = cross(right_dir, line_dir);
-
-#if !ENABLE_PACKED_FLOATS
-	vec2 half_hw_a = 0.5 * abs(hw_a);
-	vec2 half_hw_b = 0.5 * abs(hw_b);
-#endif // !ENABLE_PACKED_FLOATS
 	
 	vec3 position = vec3(0.0);
     vec3 normal = vec3(2.0); // dummy value
 	
 	// calculate output position in dependence of vertex id
 	if (vertex_id == 0) {
-#if ENABLE_PACKED_FLOATS
 		if (is_endpoint_a) {
-#else
-		if (hw_a.x < 0.0) {
-#endif // ENABLE_PACKED_FLOATS
 			// negative value for width and height means endpoint
 			position = pos_a;
 			normal = -line_dir;
 		}
-		else
-			position = calc_position(texelFetch(positionsTex, id_a - 1).xyz, pos_a, pos_b, half_hw_a.y);
+		else {
+			vec3 pos_c = texelFetch(positionsTex, id_a - 1).xyz;
+			pos_c.z = abs(pos_c.z);
+			position = calc_position(pos_c, pos_a, pos_b, half_hw_a.y);
+		}
 	}
 	else if (vertex_id == 1) { position = pos_a + half_hw_a.y * right_dir; }
 	else if (vertex_id == 2) { position = pos_a + half_hw_a.x * up_dir; }
 	else if (vertex_id == 3) { position = pos_a - half_hw_a.y * right_dir; }
 	else if (vertex_id == 4) { position = pos_a - half_hw_a.x * up_dir; }
 	else if (vertex_id == 5) {
-#if ENABLE_PACKED_FLOATS
 		if (is_endpoint_b) {
-#else
-		if (hw_b.x < 0.0) {
-#endif // ENABLE_PACKED_FLOATS
 			// negative value for width and height means endpoint
 			position = pos_b;
 			normal = line_dir;
 		}
-		else
-			position = calc_position(pos_a, pos_b, texelFetch(positionsTex, id_b + 1).xyz, half_hw_b.y);
+		else {
+			vec3 pos_c = texelFetch(positionsTex, id_b + 1).xyz;
+			pos_c.z = abs(pos_c.z);
+			position = calc_position(pos_a, pos_b, pos_c, half_hw_b.y);
+		}
 	}
 	else if (vertex_id == 6) { position = pos_b + half_hw_b.y * right_dir; }
 	else if (vertex_id == 7) { position = pos_b + half_hw_b.x * up_dir; }

@@ -376,7 +376,7 @@ static void show_visualization_type()
     ImGui::PopStyleVar();
 }
 
-void show_sequential_sliders()
+void show_sequential_sliders(const std::vector<gcode::PathPoint>& path_points)
 {
     int width, height;
     glfwGetWindowSize(glfwContext::window, &width, &height);
@@ -385,6 +385,10 @@ void show_sequential_sliders()
     ImGui::SetNextWindowBgAlpha(0.25f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##sequential", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+
+    const gcode::PathPoint& curr_point = path_points[sequential_range.get_current_max() - 1];
+    const glm::vec3 curr_pos(curr_point.position.x, curr_point.position.y, curr_point.is_extrude_move() ? curr_point.position.z + 0.5f * curr_point.height : curr_point.position.z);
+    ImGui::Text("Tool position: %.3f, %.3f, %.3f", curr_pos.x, curr_pos.y, curr_pos.z);
 
     const int global_min = (int)sequential_range.get_global_min();
     const int global_max = (int)sequential_range.get_global_max();
@@ -910,7 +914,7 @@ int main(int argc, char *argv[])
         show_opengl();
         show_visualization_type();
         show_extrusion_roles();
-        show_sequential_sliders();
+        show_sequential_sliders(points);
         show_statistics();
 
         rendering::render(path);
