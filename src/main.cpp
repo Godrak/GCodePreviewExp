@@ -256,6 +256,7 @@ static std::vector<gcode::PathPoint> readPathPoints(const std::string& filename)
     for (auto &point : pathPoints) {
         file.read(reinterpret_cast<char *>(&point), sizeof(point));
         if (point.is_extrude_move())
+            // push the toolpath down by half height
             point.position.z -= 0.5f * point.height;
         else if (point.is_travel_move()) {
             point.width = travel_radius;
@@ -334,6 +335,8 @@ static void show_opengl()
     glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &profile);
     ImGui::SameLine();
     ImGui::Text((profile == GL_CONTEXT_CORE_PROFILE_BIT) ? "Core" : "Compatibility");
+    value = (const char*)::glGetString(GL_SHADING_LANGUAGE_VERSION);
+    ImGui::Text("GLSL version: %s", value);
 
     ImGui::End();
     ImGui::PopStyleVar();
@@ -657,7 +660,11 @@ void render(gcode::BufferedPath &path)
     glActiveTexture(GL_TEXTURE1);
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     glBindTexture(GL_TEXTURE_BUFFER, path.height_width_texture);
+#if ENABLE_PACKED_FLOATS
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, path.height_width_buffer);
+#else
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, path.height_width_buffer);
+#endif // ENABLE_PACKED_FLOATS
 #else
     glBindTexture(GL_TEXTURE_BUFFER, path.height_width_angle_texture);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, path.height_width_angle_buffer);
@@ -685,6 +692,18 @@ void render(gcode::BufferedPath &path)
     glUniform3fv(camera_forward_id, 1, glm::value_ptr(camera_forward));
 #endif // !ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     checkGl();
+
+#if ENABLE_PACKED_FLOATS
+    const int hw_ranges_id = ::glGetUniformLocation(shaderProgram::gcode_program, "hw_ranges");
+    assert(hw_ranges_id >= 0);
+    const glm::vec4 hw_ranges(config::height_quantizer.min(), config::width_quantizer.min(),
+                              config::height_quantizer.step(), config::width_quantizer.step());
+    glUniform4fv(hw_ranges_id, 1, glm::value_ptr(hw_ranges));
+
+    const int hw_resolution_id = ::glGetUniformLocation(shaderProgram::gcode_program, "hw_resolution");
+    assert(hw_resolution_id >= 0);
+    glUniform1i(hw_resolution_id, QuantizersResolution);
+#endif // ENABLE_PACKED_FLOATS
 
     if (path.enabled_lines_count > 0)
         glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data.size(), path.enabled_lines_count);

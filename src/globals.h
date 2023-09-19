@@ -15,6 +15,11 @@
 
 // When ENABLE_ALTERNATE_SEGMENT_GEOMETRY is set to 1 -> use the .gc whose filename name ends with "_ex"
 #define ENABLE_ALTERNATE_SEGMENT_GEOMETRY 1
+#define ENABLE_PACKED_FLOATS (1 && ENABLE_ALTERNATE_SEGMENT_GEOMETRY)
+
+#if ENABLE_PACKED_FLOATS
+static const int QuantizersResolution{ 65536 };
+#endif // ENABLE_PACKED_FLOATS
 
 namespace globals {
 		glm::ivec2 screenResolution = {512,512};
@@ -149,6 +154,27 @@ namespace globals {
 				else
 						return { float(size) / float(GIGA), "GB" };
 		}
+
+#if ENABLE_PACKED_FLOATS
+		template<int resolution>
+		class Quantizer
+		{
+		public:
+				float min() const { return m_min; }
+				float max() const { return m_max; }
+				float range() const { return m_max - m_min; }
+				float step() const { return range() / ((float)resolution - 1.0f); }
+				void update(float value) {
+						m_min = std::min(m_min, value);
+						m_max = std::max(m_max, value);
+				}
+				void quantize(float& value) const { value = std::floor((value - m_min) / step()); }
+
+		private:
+				float m_min{ FLT_MAX };
+				float m_max{ -FLT_MAX };
+		};
+#endif // ENABLE_PACKED_FLOATS
 } // namespace globals
 
 namespace config {
@@ -191,8 +217,10 @@ std::map<globals::GCodeExtrusionRole, size_t> roles_counters;
 std::map<globals::EMoveType, size_t> option_counters;
 bool travel_paths_visibility{ true };
 bool enabled_paths_update_required = true;
-
-
+#if ENABLE_PACKED_FLOATS
+globals::Quantizer<QuantizersResolution> height_quantizer;
+globals::Quantizer<QuantizersResolution> width_quantizer;
+#endif // ENABLE_PACKED_FLOATS
 } // namespace config
 
 class SequentialRange

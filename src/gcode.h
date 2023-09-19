@@ -367,7 +367,7 @@ void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &pa
         return Dummy_Color;
     };
 
-    auto format_color = [&](const PathPoint& p) {
+    auto encode_color = [select_color](const PathPoint& p) {
         const std::array<float, 3> color = select_color(p);
         const int r = (int)(255.0f * color[0]);
         const int g = (int)(255.0f * color[1]);
@@ -378,7 +378,7 @@ void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &pa
 
     std::vector<float> colors(path_points.size());
     for (size_t i = 0; i < path_points.size(); i++) {
-        colors[i] = format_color(path_points[i]);
+        colors[i] = encode_color(path_points[i]);
     }
 
     globals::statistics.colors_size = colors.size() * sizeof(float);
@@ -396,6 +396,9 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     std::vector<glm::vec3> positions;
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     std::vector<glm::vec2> height_width;
+#if ENABLE_PACKED_FLOATS
+    std::vector<float> packed_hw;
+#endif // ENABLE_PACKED_FLOATS
 #else
     std::vector<glm::vec3> height_width_angle;
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
@@ -404,6 +407,9 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     result.valid_lines_bitset.setAll();
 
     for (size_t i = 0; i < path_points.size(); i++) {
+#if ENABLE_PACKED_FLOATS
+        const PathPoint& p = path_points[i];
+#endif // ENABLE_PACKED_FLOATS
         const bool prev_line_valid = i > 0 && result.valid_lines_bitset[i - 1];
         const glm::vec3 prev_line = prev_line_valid ? (path_points[i].position - path_points[i - 1].position) : glm::vec3(0);
 
@@ -415,27 +421,72 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
         if (this_line_valid) {
             // there is a valid path between point i and i+1.
-        } else {
+        }
+        else {
             // the connection is invalid, there should be no line rendered, ever
             result.valid_lines_bitset.reset(i);
         }
 
-        const PathPoint &p = path_points[i];
-        positions.push_back(p.position);
-#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#if ENABLE_PACKED_FLOATS
         const bool is_endpoint = !prev_line_valid || !this_line_valid;
+        // encode endpoints by using negative z
+        positions.push_back({ p.position.x, p.position.y, is_endpoint ? -p.position.z : p.position.z });
+        // if quantized, store half height and half width
+        const float h = 0.5f * p.height;
+        const float w = 0.5f * p.width;
+        height_width.push_back({ h, w });
+        packed_hw.push_back(h);
+        const globals::EMoveType type = globals::extract_type_from_flags(p.flags);
+        if (type == globals::EMoveType::Extrude ||
+            type == globals::EMoveType::Wipe ||
+            type == globals::EMoveType::Travel) {
+            config::height_quantizer.update(h);
+            config::width_quantizer.update(w);
+        }
+#else
+        const PathPoint& p = path_points[i];
+        positions.push_back(p.position);
+#endif // ENABLE_PACKED_FLOATS
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#if !ENABLE_PACKED_FLOATS
+        const bool is_endpoint = !prev_line_valid || !this_line_valid;
+        // encode endpoints by using negative height and width
         height_width.push_back({ is_endpoint ? -p.height : p.height, is_endpoint ? -p.width : p.width });
+#endif // !ENABLE_PACKED_FLOATS
 #else
         const float angle = atan2(prev_line.x * this_line.y - prev_line.y * this_line.x, glm::dot(prev_line, this_line));
         height_width_angle.push_back({ p.height, p.width, angle });
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
     }
 
+#if ENABLE_PACKED_FLOATS
+    // quantize heights and widths
+    for (size_t i = 0; i < path_points.size(); i++) {
+        const PathPoint& p = path_points[i];
+        const globals::EMoveType type = globals::extract_type_from_flags(p.flags);
+        if (type == globals::EMoveType::Extrude ||
+            type == globals::EMoveType::Wipe ||
+            type == globals::EMoveType::Travel) {
+            glm::vec2& hw = height_width[i];
+            config::height_quantizer.quantize(hw.x);
+            config::width_quantizer.quantize(hw.y);
+            packed_hw[i] = hw.x * QuantizersResolution + hw.y;
+            hw = { hw.x * QuantizersResolution + hw.y, 0.0f };
+//            glm::uvec2 uhw((uint32_t)hw.x, (uint32_t)hw.y);
+//            hw = { uhw.x * QuantizersResolution + uhw.y , 0.0f };
+        }
+    }
+#endif // ENABLE_PACKED_FLOATS
+
     result.total_points_count = path_points.size();
 
     globals::statistics.positions_size = positions.size() * sizeof(glm::vec3);
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#if ENABLE_PACKED_FLOATS
+    globals::statistics.height_width_size = packed_hw.size() * sizeof(float);
+#else
     globals::statistics.height_width_size = height_width.size() * sizeof(glm::vec2);
+#endif // ENABLE_PACKED_FLOATS
 #else
     globals::statistics.height_width_angle_size = height_width_angle.size() * sizeof(glm::vec3);
 #endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
@@ -471,14 +522,22 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
 
     // buffer data to the buffer
 #if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+#if ENABLE_PACKED_FLOATS
+    glBufferData(GL_TEXTURE_BUFFER, packed_hw.size() * sizeof(float), packed_hw.data(), GL_STATIC_DRAW);
+#else
     glBufferData(GL_TEXTURE_BUFFER, height_width.size() * sizeof(glm::vec2), height_width.data(), GL_STATIC_DRAW);
+#endif // ENABLE_PACKED_FLOATS
 
     // Create and bind the texture
     glGenTextures(1, &result.height_width_texture);
     glBindTexture(GL_TEXTURE_BUFFER, result.height_width_texture);
 
     // Attach the buffer object to the texture buffer
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, result.height_width_buffer);
+#if ENABLE_PACKED_FLOATS
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, result.height_width_buffer);
+#else
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, result.height_width_buffer);
+#endif // ENABLE_PACKED_FLOATS
 #else
     glBufferData(GL_TEXTURE_BUFFER, height_width_angle.size() * sizeof(glm::vec3), height_width_angle.data(), GL_STATIC_DRAW);
 
