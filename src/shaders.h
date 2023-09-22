@@ -14,7 +14,7 @@ GLuint visibility_v_shader, visibility_f_shader, visibility_program;
 
 GLuint cheap_v_shader, cheap_f_shader, cheap_program;
 
-bool check_shader(std::string source, GLuint id, GLenum st) {
+bool check_shader(const std::string& source, GLuint id, GLenum st) {
 	GLint logLength;
 	glGetShaderiv(id, GL_INFO_LOG_LENGTH, &logLength);
 	if (logLength > 2) {

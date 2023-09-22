@@ -10,10 +10,11 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
-#include <pstl/glue_algorithm_defs.h>
 #include <random>
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include <pstl/glue_algorithm_defs.h>
 #endif // _WIN32
 
 #include "glad/glad.h"
@@ -61,7 +62,6 @@
 
 namespace glfwContext {
 Camera camera;
-int fps_target_value;
 
 GLFWwindow *window{nullptr};
 int         forth_back = 0;
@@ -81,16 +81,6 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
     switch (action) {
     case GLFW_PRESS: {
         switch (key) {
-        case GLFW_KEY_F2: {
-            config::geometryMode = 1 - config::geometryMode;
-            break;
-        }
-        case GLFW_KEY_F3: {
-            config::vsync = 1 - config::vsync;
-            std::cout << "vsync: " << config::vsync << std::endl;
-            glfwSwapInterval(config::vsync);
-            break;
-        }
         case GLFW_KEY_W: {
             forth_back = 1;
             break;
@@ -129,18 +119,22 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
         }
         case GLFW_KEY_LEFT: {
             sequential_range.decrease_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_RIGHT: {
             sequential_range.increase_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_DOWN: {
             sequential_range.decrease_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_UP: {
             sequential_range.increase_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         }
@@ -174,18 +168,22 @@ static void glfw_key_callback(GLFWwindow *window, int key, int scancode, int act
         switch (key) {
         case GLFW_KEY_LEFT: {
             sequential_range.decrease_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_RIGHT: {
             sequential_range.increase_current_max(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_DOWN: {
             sequential_range.decrease_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         case GLFW_KEY_UP: {
             sequential_range.increase_current_min(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) ? 100 : 1);
+            config::enabled_paths_update_required = true;
             break;
         }
         }
@@ -237,7 +235,7 @@ static void glfw_window_iconify_callback(GLFWwindow* window, int value)
 } // namespace glfwContext
 
 // Reader function to load vector of PathPoints from a file
-static std::vector<gcode::PathPoint> readPathPoints(const std::string &filename)
+static std::vector<gcode::PathPoint> readPathPoints(const std::string& filename)
 {
     std::vector<gcode::PathPoint> pathPoints;
 
@@ -250,12 +248,39 @@ static std::vector<gcode::PathPoint> readPathPoints(const std::string &filename)
     // Read the size of the vector
     size_t size;
     file.read(reinterpret_cast<char *>(&size), sizeof(size));
-    std::cout << "SIZE IS: " << size << std::endl;
     pathPoints.resize(size);
 
     // Read each PathPoint object from the file
+    static const float travel_radius = 0.05f;
+    static const float wipes_radius = 0.15f;
     for (auto &point : pathPoints) {
         file.read(reinterpret_cast<char *>(&point), sizeof(point));
+        if (point.is_extrude_move())
+            // push the toolpath down by half height
+            point.position.z -= 0.5f * point.height;
+        else if (point.is_travel_move()) {
+            point.width = travel_radius;
+            point.height = travel_radius;
+        }
+        else if (point.is_wipe_move()) {
+            point.width = wipes_radius;
+            point.height = wipes_radius;
+        }
+
+        const globals::EMoveType type = globals::extract_type_from_flags(point.flags);
+        if (type == globals::EMoveType::Extrude) {
+            const globals::GCodeExtrusionRole role = globals::extract_role_from_flags(point.flags);
+            auto it = config::roles_counters.find(role);
+            if (it == config::roles_counters.end())
+                it = config::roles_counters.insert({ role, 0 }).first;
+            it->second++;
+        }
+        else {
+            auto it = config::option_counters.find(type);
+            if (it == config::option_counters.end())
+                it = config::option_counters.insert({ type, 0 }).first;
+            it->second++;
+        }
     }
 
     file.close();
@@ -283,28 +308,13 @@ void show_config_window()
     ImGui::SetNextWindowBgAlpha(0.25f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##config", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
-    if (ImGui::Checkbox("force_full_model_render", &config::force_full_model_render)) {
-         config::enabled_paths_update_required = true;
-    }
-    if (ImGui::Checkbox("view_travel_paths", &config::view_travel_paths)) { config::enabled_paths_update_required = true;}
-    if (ImGui::Checkbox("view_perimeters", &config::view_perimeters)) { config::enabled_paths_update_required = true;}
-    if (ImGui::Checkbox("view_inner_perimeters", &config::view_inner_perimeters)) { config::enabled_paths_update_required = true;}
-    if (ImGui::Checkbox("view_internal_infill", &config::view_internal_infill)) { config::enabled_paths_update_required = true;}
-    if (ImGui::Checkbox("view_solid_infills", &config::view_solid_infills)) { config::enabled_paths_update_required = true;}
-    if (ImGui::Checkbox("view_supports", &config::view_supports)) { config::enabled_paths_update_required = true;}
-    if (ImGui::Checkbox("vsync", &config::vsync)) {}
-    if (ImGui::Checkbox("use_travel_moves_data", &config::use_travel_moves_data)) {
-        config::ranges_update_required = true;
-        config::color_update_required = true;
-    }
-    ImGui::Separator();
-    if (ImGui::Button("Center view", { -1.0f, 0.0f })) {
-        config::camera_center_required = true;
-    }
 
-    ImGui::Text("Keep FPS above: ");
-    ImGui::SameLine();
-    ImGui::SliderInt("##slider_low", &glfwContext::fps_target_value, 0, 60, "%d", ImGuiSliderFlags_NoInput);
+    ImGui::Checkbox("wireframe", &config::geometryMode);
+    if (ImGui::Checkbox("vsync", &config::vsync)) { glfwSwapInterval(config::vsync ? 1 : 0); }
+    ImGui::Checkbox("orthographic camera", &config::orthographic_camera);
+    ImGui::Separator();
+    if (ImGui::Button("Center view", { -1.0f, 0.0f }))
+        config::camera_center_required = true;
 
     ImGui::End();
     ImGui::PopStyleVar();
@@ -325,6 +335,8 @@ static void show_opengl()
     glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &profile);
     ImGui::SameLine();
     ImGui::Text((profile == GL_CONTEXT_CORE_PROFILE_BIT) ? "Core" : "Compatibility");
+    value = (const char*)::glGetString(GL_SHADING_LANGUAGE_VERSION);
+    ImGui::Text("GLSL version: %s", value);
 
     ImGui::End();
     ImGui::PopStyleVar();
@@ -364,7 +376,7 @@ static void show_visualization_type()
     ImGui::PopStyleVar();
 }
 
-void show_sequential_sliders()
+void show_sequential_sliders(const std::vector<gcode::PathPoint>& path_points)
 {
     int width, height;
     glfwGetWindowSize(glfwContext::window, &width, &height);
@@ -373,6 +385,21 @@ void show_sequential_sliders()
     ImGui::SetNextWindowBgAlpha(0.25f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##sequential", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+
+    if (sequential_range.get_current_max() < path_points.size()) {
+        const gcode::PathPoint& curr_point = path_points[sequential_range.get_current_max()];
+        const globals::EMoveType type = curr_point.type_from_flags();
+        const globals::GCodeExtrusionRole role = curr_point.role_from_flags();
+        if (type == globals::EMoveType::Extrude) {
+            const glm::vec3 curr_pos(curr_point.position.x, curr_point.position.y, curr_point.position.z + 0.5f * curr_point.height);
+            ImGui::Text("Tool position: %.3f, %.3f, %.3f [%s] Width: %.3f - Height: %.3f",
+                curr_pos.x, curr_pos.y, curr_pos.z, globals::gcode_extrusion_role_to_string(role).c_str(), curr_point.width, curr_point.height);
+        }
+        else {
+            ImGui::Text("Tool position: %.3f, %.3f, %.3f [%s]",
+                curr_point.position.x, curr_point.position.y, curr_point.position.z, globals::gcode_move_type_to_string(type).c_str());
+        }
+    }
 
     const int global_min = (int)sequential_range.get_global_min();
     const int global_max = (int)sequential_range.get_global_max();
@@ -407,6 +434,134 @@ void show_sequential_sliders()
     ImGui::PopStyleVar();
 }
 
+void show_extrusion_roles()
+{
+    int width, height;
+    glfwGetWindowSize(glfwContext::window, &width, &height);
+
+    ImGui::SetNextWindowPos({ (float)width, 0.5f * (float)height }, ImGuiCond_Always, { 1.0f, 0.5f });
+    ImGui::SetNextWindowBgAlpha(0.25f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("##extrusion_roles", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+
+    auto append_extrusion_role_checkbox = [](globals::GCodeExtrusionRole role) {
+        if (config::roles_counters.find(role) != config::roles_counters.end()) {
+            bool& value = config::extrusion_roles_visibility[role];
+            if (ImGui::Checkbox(globals::gcode_extrusion_role_to_string(role).c_str(), &value)) {
+                config::enabled_paths_update_required = true;
+                if (role == globals::GCodeExtrusionRole::Custom) {
+                    if (config::visualization_type == 2 /*Width*/ ||
+                        config::visualization_type == 6 /*Volumetric flow rate*/)
+                        config::ranges_update_required = true;
+                    config::color_update_required = true;
+                }
+            }
+        }
+    };
+    auto append_option_checkbox = [](globals::EMoveType type) {
+        if (config::option_counters.find(type) != config::option_counters.end()) {
+            bool& value = config::options_visibility[type];
+            if (ImGui::Checkbox(globals::gcode_move_type_to_string(type).c_str(), &value)) { config::enabled_paths_update_required = true; }
+        }
+    };
+
+    ImGui::Text("Extrusion roles");
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::None);
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::Perimeter);
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::ExternalPerimeter);
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::OverhangPerimeter); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::InternalInfill); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::SolidInfill); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::TopSolidInfill); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::Ironing); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::BridgeInfill); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::GapFill); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::Skirt); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::SupportMaterial); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::SupportMaterialInterface); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::WipeTower); 
+    append_extrusion_role_checkbox(globals::GCodeExtrusionRole::Custom); 
+    ImGui::Separator();
+    ImGui::Text("Options");
+    if (ImGui::Checkbox("Travel", &config::travel_paths_visibility)) {
+        config::enabled_paths_update_required = true;
+        config::ranges_update_required = true;
+        config::color_update_required = true;
+    }
+
+    append_option_checkbox(globals::EMoveType::Retract);
+    append_option_checkbox(globals::EMoveType::Unretract);
+    append_option_checkbox(globals::EMoveType::Seam);
+    append_option_checkbox(globals::EMoveType::Tool_change);
+    append_option_checkbox(globals::EMoveType::Color_change);
+    append_option_checkbox(globals::EMoveType::Pause_print);
+    append_option_checkbox(globals::EMoveType::Custom_GCode);
+    append_option_checkbox(globals::EMoveType::Wipe);
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
+void show_statistics()
+{
+    int width, height;
+    glfwGetWindowSize(glfwContext::window, &width, &height);
+
+    ImGui::SetNextWindowPos({ 0.0f, 0.5f * (float)height }, ImGuiCond_Always, { 0.0f, 0.5f });
+    ImGui::SetNextWindowBgAlpha(0.25f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("##statistics", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+
+    const ImVec4 label_color(1.0f, 1.0f, 0.0f, 1.0f);
+    const ImVec4 value_color(1.0f, 1.0f, 1.0f, 1.0f);
+
+    auto add_memsize_row = [&](const std::string& label, size_t size) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        const std::string key = label + " size";
+        ImGui::TextColored(label_color, key.c_str());
+        ImGui::TableSetColumnIndex(1);
+        const auto [mem_size, units] = globals::format_memsize(size);
+        if (units == "bytes")
+            ImGui::TextColored(value_color, "%d %s", size, units.c_str());
+        else
+            ImGui::TextColored(value_color, "%.3f %s", mem_size, units.c_str());
+    };
+
+    if (ImGui::BeginTable("Statistics", 2)) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextColored(label_color, "Window size");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextColored(value_color, "%dx%d", width, height);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextColored(label_color, "Total moves");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextColored(value_color, "%d", globals::statistics.total_moves);
+        add_memsize_row("Moves", globals::statistics.moves_size);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextColored(label_color, "Enabled lines");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextColored(value_color, "%d", globals::statistics.enabled_lines);
+        add_memsize_row("Enabled lines buffer", globals::statistics.enabled_lines_size);
+        add_memsize_row("Colors buffer", globals::statistics.colors_size);
+        add_memsize_row("Positions buffer", globals::statistics.positions_size);
+#if ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+        add_memsize_row("HW buffer", globals::statistics.height_width_size);
+#else
+        add_memsize_row("HWA buffer", globals::statistics.height_width_angle_size);
+#endif // ENABLE_ALTERNATE_SEGMENT_GEOMETRY
+        add_memsize_row("Vertex data buffer", globals::statistics.vertex_data_size);
+        add_memsize_row("Total buffers", globals::statistics.buffers_size());
+        ImGui::EndTable();
+    }
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
 namespace rendering {
 
 
@@ -429,7 +584,7 @@ public:
 
     void center_camera() {
         glfwContext::camera.target =  0.5f * (m_min + m_max);
-        glfwContext::camera.position = m_max;
+        glfwContext::camera.position = glfwContext::camera.target + glm::length(m_max - m_min) * glm::normalize(glm::vec3(-1.0f, -1.0f, 1.0f));
     }
 
     glm::vec3 get_size() {
@@ -456,18 +611,14 @@ Camera camera_snapshot = glfwContext::camera;
 
 void switchConfiguration()
 {
-    if (config::geometryMode) {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        checkGl();
-    } else {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        checkGl();
-    }
+    glPolygonMode(GL_FRONT_AND_BACK, config::geometryMode ? GL_LINE : GL_FILL);
 }
 
 void render(gcode::BufferedPath &path)
 {
-    glfwContext::camera.moveCamera({glfwContext::forth_back, glfwContext::left_right, glfwContext::up_down});
+    const glm::vec3 camera_displacement(glfwContext::forth_back, glfwContext::left_right, glfwContext::up_down);
+    if (glm::length(camera_displacement) > 0.0f)
+        glfwContext::camera.moveCamera(camera_displacement);
 
     if (config::camera_center_required) {
         scene_box.center_camera();
@@ -477,9 +628,8 @@ void render(gcode::BufferedPath &path)
     glm::ivec2 new_size;
     glfwGetFramebufferSize(glfwContext::window, &new_size.x, &new_size.y);
     checkGl();
-    if (new_size != globals::screenResolution) {
-        globals::screenResolution     = new_size;
-    }
+    if (new_size != globals::screenResolution)
+        globals::screenResolution = new_size;
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     checkGl();
@@ -498,7 +648,7 @@ void render(gcode::BufferedPath &path)
     assert(positions_tex_id >= 0);
     const int height_width_angle_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "heightWidthAngleTex");
     assert(height_width_angle_tex_id >= 0);
-     const int colors_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "colorsTex");
+    const int colors_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "colorsTex");
     assert(colors_tex_id >= 0);
     const int segment_index_tex_id = ::glGetUniformLocation(shaderProgram::gcode_program, "segmentIndexTex");
     assert(segment_index_tex_id >= 0);
@@ -537,7 +687,7 @@ void render(gcode::BufferedPath &path)
     checkGl();
 
     if (path.enabled_lines_count > 0)
-        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) gcode::vertex_data_size, path.enabled_lines_count);
+        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)gcode::vertex_data.size(), path.enabled_lines_count);
     checkGl();
 
     glUseProgram(0);
@@ -567,11 +717,17 @@ int main(int argc, char *argv[])
     auto points = readPathPoints(filename);
     rendering::scene_box.update(points);
 
+    globals::statistics.total_moves = points.size();
+    globals::statistics.moves_size = points.size() * sizeof(gcode::PathPoint);
+
     glfwSetErrorCallback(glfwContext::glfw_error_callback);
     if (!glfwInit())
         return 1;
 
-        // Decide GL+GLSL versions
+    const GLFWvidmode* video_mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    assert(video_mode != nullptr);
+
+    // Decide GL+GLSL versions
 #if defined(IMGUI_IMPL_OPENGL_ES2)
     // GL ES 2.0 + GLSL 100
     const char *glsl_version = "#version 100";
@@ -586,21 +742,30 @@ int main(int argc, char *argv[])
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); // 3.2+ only
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);           // Required on Mac
 #else
-    // GL 3.2 + GLSL 130
-    const char* glsl_version = "#version 130";
+    // GL 3.2 + GLSL 150
+    const char* glsl_version = "#version 150";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
 //    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);  // 3.2+ only    
     // glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
 #endif
+    glfwWindowHint(GLFW_VISIBLE, false);
 
     // Create window with graphics context
-    GLFWwindow *window = glfwCreateWindow(1280, 720, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+    // 1284x883 is the size of the canvas in PrusaSlicer preview on 1920x1080 monitor
+    // 1788x916 is the size of the canvas in GCodeViewer on 1920x1080 monitor
+    const int window_w = 1284; // 1788;
+    const int window_h = 883;  // 916;
+    GLFWwindow* window = glfwCreateWindow(window_w, window_h, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
     if (window == nullptr)
         return 1;
+
+    glfwSetWindowPos(window, (video_mode->width - window_w) / 2, (video_mode->height - window_h) / 2);
+    glfwShowWindow(window);
+
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // Enable vsync
+    glfwSwapInterval(config::vsync ? 1 : 0);
 
     glfwContext::window = window;
 
@@ -611,6 +776,7 @@ int main(int argc, char *argv[])
     (void) io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
+    io.IniFilename = nullptr;
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -656,8 +822,6 @@ int main(int argc, char *argv[])
     sequential_range.set_global_max(path.total_points_count);
     sequential_range.set_current_max(path.total_points_count);
 
-    std::cout << "PATHS BUFFERED" << std::endl;
-
     // Main loop
 #ifdef __EMSCRIPTEN__
     // For an Emscripten build we are disabling file-system access, so let's not attempt to do a fopen() of the imgui.ini file.
@@ -695,7 +859,7 @@ int main(int argc, char *argv[])
             config::color_update_required = false;
         }
 
-         if (config::enabled_paths_update_required) {
+        if (config::enabled_paths_update_required) {
             gcode::updateEnabledLines(path, points);
             config::enabled_paths_update_required = false;
         }
@@ -709,7 +873,9 @@ int main(int argc, char *argv[])
         show_config_window();
         show_opengl();
         show_visualization_type();
-        show_sequential_sliders();
+        show_extrusion_roles();
+        show_sequential_sliders(points);
+        show_statistics();
 
         rendering::render(path);
 

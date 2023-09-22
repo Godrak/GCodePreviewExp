@@ -1,4 +1,4 @@
-#version 140
+#version 150
 
 uniform mat4 view_projection;
 uniform vec3 camera_position;
@@ -23,12 +23,21 @@ in int vertex_id;
 
 out vec3 color;
 
-void main() {
-    vec3 UP = vec3(0,0,1);
+const vec3  light_top_dir = vec3(-0.4574957, 0.4574957, 0.7624929);
+const float light_top_diffuse = 0.6*0.8;
+const float light_top_specular = 0.6*0.125;
+const float light_top_shininess = 20.0;
 
-    // Retrieve the instance ID
-    int id_position = gl_InstanceID;
-    int id_a = int(texelFetch(segmentIndexTex, int(id_position)).r);
+const vec3  light_front_dir = vec3(0.6985074, 0.1397015, 0.6985074);
+const float light_front_diffuse = 0.6*0.3;
+
+const float ambient = 0.3;
+const float emission = 0.1;
+
+const vec3 UP = vec3(0,0,1);
+
+void main() {
+    int id_a = texelFetch(segmentIndexTex, gl_InstanceID).r;
     int id_b = id_a + 1;
 
     vec3 pos_a = texelFetch(positionsTex, id_a).xyz;
@@ -70,7 +79,7 @@ void main() {
     // vertex_position = pos_far + vertical_dir;    6
 
     const vec2 horizontal_vertical_view_signs_array[16] = vec2[](
-        //horizontal view
+        //horizontal view (from right)
         vec2( 1.0,  0.0),
         vec2( 0.0,  1.0),
         vec2(-1.0,  0.0),
@@ -79,7 +88,7 @@ void main() {
         vec2( 1.0,  0.0),
         vec2( 0.0,  1.0),
         vec2( 0.0,  1.0),
-        // vertical view
+        // vertical view (from top)
         vec2( 0.0,  1.0),
         vec2(-1.0,  0.0),
         vec2( 0.0, -1.0),
@@ -118,22 +127,15 @@ void main() {
         pos += right_dir * final_height_width_angle.y * 0.5 * cos(final_height_width_angle.z * 0.5);
     }
 
-    //LIGHT
+    // LIGHTING begin
     vec3 color_base = decode_color(texelFetch(colorsTex, id_final).x);
     vec3 normal = normalize(pos - segment_pos);
 
-    vec3 light_top_dir = vec3(-0.4574957, 0.4574957, 0.7624929);
-    float light_top_diffuse = 0.6*0.8;
-
-    vec3 light_front_dir = vec3(-0.4574957, 0.4574957, 0.7624929);
-    float light_front_diffuse = 0.6*0.3;
-
-    float ambient = 0.3;
-
-    float diffuseFactor = max(dot(normal, light_top_dir), 0.0);
-    float diffuseFactor2 = max(dot(normal, -light_front_dir), 0.0);
-    color = color_base * (ambient + light_top_diffuse * diffuseFactor + light_front_diffuse * diffuseFactor2);
-    // LIGHT end
+    float top_diffuse = light_top_diffuse * max(dot(normal, light_top_dir), 0.0);
+    float front_diffuse = light_front_diffuse * max(dot(normal, light_front_dir), 0.0);
+    float top_specular = light_top_specular * pow(max(dot(-normalize(pos), reflect(-light_top_dir, normal)), 0.0), light_top_shininess);
+    color = color_base * (ambient + top_diffuse + front_diffuse + top_specular + emission);
+    // LIGHTING end
         
     gl_Position = view_projection * vec4(pos, 1.0);
 }

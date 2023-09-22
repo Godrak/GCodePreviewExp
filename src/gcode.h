@@ -21,31 +21,25 @@
 
 namespace gcode {
 
-static unsigned int extract_role_from_flags(unsigned int flags) { return flags & 0xFF; }
-static unsigned int extract_type_from_flags(unsigned int flags) { return (flags >> 8) & 0xFF; }
-
 GLuint gcodeVAO, vertexBuffer;
-
-GLuint pathSSBObindPoint = 5;
 
 GLint vid_loc = 0;
 
 //     /1-------6\    
 //    / |       | \  
-//   2  0-------5  7
+//   2--0-------5--7
 //    \ |       | /  
 //      3-------4    
-size_t vertex_data_size = 24;
-int vertex_data[] = {  
-        0, 1, 2,  // front spike
-        0, 2, 3,// front spike
-        0, 3, 4, //right/bottom body 
-        0, 4, 5, //right/bottom body 
-        0, 5, 6, //left/top body 
-        0, 6, 1, //left/top body 
-        5, 4, 7, // back spike
-        5, 7, 6, // back spike
-        };
+const std::vector<uint8_t> vertex_data = {
+    0, 1, 2, // front spike
+    0, 2, 3, // front spike
+    0, 3, 4, // right/bottom body 
+    0, 4, 5, // right/bottom body 
+    0, 5, 6, // left/top body 
+    0, 6, 1, // left/top body 
+    5, 4, 7, // back spike
+    5, 7, 6, // back spike
+};
 
 struct PathPoint
 {
@@ -61,11 +55,49 @@ struct PathPoint
     unsigned int colorid;
 
     unsigned int encode_flags(unsigned int role, unsigned int type) { flags = role << 0 | type << 8; return flags; }
-    unsigned int role_from_flags() const { return extract_role_from_flags(flags); }
-    unsigned int type_from_flags() const { return extract_type_from_flags(flags); }
-    bool is_travel_move() const  { return extract_type_from_flags(flags) == 8; }
-    bool is_extrude_move() const { return extract_type_from_flags(flags) == 10; }
+    globals::GCodeExtrusionRole role_from_flags() const { return globals::extract_role_from_flags(flags); }
+    globals::EMoveType type_from_flags() const { return globals::extract_type_from_flags(flags); }
+
+    bool is_extrude_move() const { return globals::extract_type_from_flags(flags) == globals::EMoveType::Extrude; }
+    bool is_custom_gcode_move() const {
+        return globals::extract_type_from_flags(flags) == globals::EMoveType::Extrude &&
+               globals::extract_role_from_flags(flags) == globals::GCodeExtrusionRole::Custom;
+    }
+    bool is_travel_move() const { return globals::extract_type_from_flags(flags) == globals::EMoveType::Travel; }
+    bool is_wipe_move() const { return globals::extract_type_from_flags(flags) == globals::EMoveType::Wipe; }
+    bool is_option_move() const {
+        switch (globals::extract_type_from_flags(flags))
+        {
+        case globals::EMoveType::Retract:
+        case globals::EMoveType::Unretract:
+        case globals::EMoveType::Seam:
+        case globals::EMoveType::Tool_change:
+        case globals::EMoveType::Color_change:
+        case globals::EMoveType::Pause_print:
+        case globals::EMoveType::Wipe:
+        {
+            return true;
+        }
+        default:
+        {
+            return false;
+        }
+        }
+    }
 };
+
+const std::array<float, 3> Dummy_Color{ 0.0f, 0.0f, 0.0f };
+
+const std::map<globals::EMoveType, std::array<float, 3>> Option_Colors{ {
+    { globals::EMoveType::Retract,      { 0.803f, 0.135f, 0.839f } },
+    { globals::EMoveType::Unretract,    { 0.287f, 0.679f, 0.810f } },
+    { globals::EMoveType::Seam,         { 0.900f, 0.900f, 0.900f } },
+    { globals::EMoveType::Tool_change,  { 0.758f, 0.744f, 0.389f } },
+    { globals::EMoveType::Color_change, { 0.856f, 0.582f, 0.546f } },
+    { globals::EMoveType::Pause_print,  { 0.322f, 0.942f, 0.512f } },
+    { globals::EMoveType::Custom_GCode, { 0.886f, 0.825f, 0.262f } },
+    { globals::EMoveType::Wipe,         { 1.000f, 1.000f, 0.000f } }
+} };
 
 const std::vector<std::array<float, 3>> Extrusion_Role_Colors{ {
     { 0.90f, 0.70f, 0.70f },   // None
@@ -187,13 +219,15 @@ void set_ranges(const std::vector<PathPoint>& path_points)
     for (size_t i = 0; i < path_points.size(); i++) {
         const PathPoint& p = path_points[i];
         if (p.is_extrude_move()) {
-            width_range.update(p.width);
+            if (config::extrusion_roles_visibility[globals::GCodeExtrusionRole::Custom] || !p.is_custom_gcode_move()) {
+                width_range.update(p.width);
+                volumetricrate_range.update(p.volumetricrate);
+            }
             height_range.update(p.height);
             fanspeed_range.update(p.fanspeed);
             temperature_range.update(p.temperature);
-            volumetricrate_range.update(p.volumetricrate);
         }
-        if (config::use_travel_moves_data || p.is_extrude_move())
+        if (config::travel_paths_visibility || p.is_extrude_move())
             speed_range.update(p.speed);
     }
 }
@@ -204,60 +238,52 @@ struct BufferedPath
     GLuint                             height_width_angle_texture, height_width_angle_buffer;
     GLuint                             color_texture, color_buffer;
     GLuint                             enabled_lines_texture, enabled_lines_buffer;
-    size_t                             enabled_lines_count;
+    size_t                             enabled_lines_count{ 0 };
     size_t                             total_points_count;
     bitset::BitSet<>                   valid_lines_bitset;
 };
 
 void updateEnabledLines(BufferedPath &path, const std::vector<PathPoint> &path_points) {
-    std::vector<glm::uint32_t> enabled_lines{};
-    enabled_lines.reserve(path.enabled_lines_count);
-    for (glm::uint32_t i = sequential_range.get_current_min(); i < sequential_range.get_current_max(); i++) {
-//   { 0.90f, 0.70f, 0.70f },   // None
-//     { 1.00f, 0.90f, 0.30f },   // Perimeter
-//     { 1.00f, 0.49f, 0.22f },   // ExternalPerimeter
-//     { 0.12f, 0.12f, 1.00f },   // OverhangPerimeter
-//     { 0.69f, 0.19f, 0.16f },   // InternalInfill
-//     { 0.59f, 0.33f, 0.80f },   // SolidInfill
-//     { 0.94f, 0.25f, 0.25f },   // TopSolidInfill
-//     { 1.00f, 0.55f, 0.41f },   // Ironing
-//     { 0.30f, 0.50f, 0.73f },   // BridgeInfill
-//     { 1.00f, 1.00f, 1.00f },   // GapFill
-//     { 0.00f, 0.53f, 0.43f },   // Skirt
-//     { 0.00f, 1.00f, 0.00f },   // SupportMaterial
-//     { 0.00f, 0.50f, 0.00f },   // SupportMaterialInterface
-//     { 0.70f, 0.89f, 0.67f },   // WipeTower
-//     { 0.37f, 0.82f, 0.58f },   // Custom
-
-
-        bool is_travel = path_points[i].is_travel_move();
-        const unsigned int role = path_points[i].role_from_flags();
+    std::vector<uint32_t> enabled_lines{};
+    if (path.enabled_lines_count > 0)
+        enabled_lines.reserve(path.enabled_lines_count);
+    for (uint32_t i = sequential_range.get_current_min(); i < sequential_range.get_current_max(); i++) {
+        const globals::GCodeExtrusionRole role = path_points[i].role_from_flags();
 
         if (!path.valid_lines_bitset[i]) continue;
-
-        if (!config::view_travel_paths && is_travel) continue;
-        if (!config::view_perimeters && (role == 2)) continue;
-        if (!config::view_inner_perimeters && (role == 1 || role == 3))continue;
-        if (!config::view_internal_infill && (role == 4)) continue;
-        if (!config::view_solid_infills && (role == 5 || role == 6 || role == 8)) continue;
-        if (!config::view_supports && (role == 11 || role == 12)) continue;
-
+        if (path_points[i].is_travel_move()) {
+            if (!config::travel_paths_visibility) continue;
+        }
+        else if (path_points[i].is_option_move()) {
+            if (!config::options_visibility[path_points[i].type_from_flags()]) continue;
+        }
+        else {
+            if (!config::extrusion_roles_visibility[role]) continue;
+        }
         enabled_lines.push_back(i);
     }
 
+    globals::statistics.enabled_lines = enabled_lines.size();
+    globals::statistics.enabled_lines_size = enabled_lines.size() * sizeof(uint32_t);
+
     glBindBuffer(GL_TEXTURE_BUFFER, path.enabled_lines_buffer);
     // buffer data to the buffer
-    glBufferData(GL_TEXTURE_BUFFER, enabled_lines.size() * sizeof(glm::uint32_t), enabled_lines.data(), GL_STATIC_DRAW);
-    path.enabled_lines_count = enabled_lines.size();
+    if (!enabled_lines.empty())
+        glBufferData(GL_TEXTURE_BUFFER, enabled_lines.size() * sizeof(uint32_t), enabled_lines.data(), GL_STATIC_DRAW);
+    else
+        glBufferData(GL_TEXTURE_BUFFER, 0, nullptr, GL_STATIC_DRAW);
 
+    path.enabled_lines_count = enabled_lines.size();
 }
 
 void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &path_points)
 {
     auto select_color = [](const PathPoint& p) {
-        static const std::array<float, 3> error_color = { 0.5f, 0.5f, 0.5f };
-        const unsigned int role = extract_role_from_flags(p.flags);
-        const unsigned int type = extract_type_from_flags(p.flags);
+        const unsigned int role = (unsigned int)globals::extract_role_from_flags(p.flags);
+        const globals::EMoveType type = globals::extract_type_from_flags(p.flags);
+        if (type != globals::EMoveType::Travel && type != globals::EMoveType::Extrude)
+            return Option_Colors.at(type);
+
         switch (config::visualization_type)
         {
         // feature type
@@ -306,10 +332,10 @@ void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &pa
         }
         }
 
-        return error_color;
+        return Dummy_Color;
     };
 
-    auto format_color = [&](const PathPoint& p) {
+    auto encode_color = [select_color](const PathPoint& p) {
         const std::array<float, 3> color = select_color(p);
         const int r = (int)(255.0f * color[0]);
         const int g = (int)(255.0f * color[1]);
@@ -320,8 +346,11 @@ void updatePathColors(const BufferedPath &path, const std::vector<PathPoint> &pa
 
     std::vector<float> colors(path_points.size());
     for (size_t i = 0; i < path_points.size(); i++) {
-        colors[i] = format_color(path_points[i]);
+        colors[i] = encode_color(path_points[i]);
     }
+
+    globals::statistics.colors_size = colors.size() * sizeof(float);
+
     assert(path.color_buffer > 0);
     glBindBuffer(GL_TEXTURE_BUFFER, path.color_buffer);
     // buffer data to the path buffer
@@ -339,12 +368,15 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     result.valid_lines_bitset.setAll();
 
     for (size_t i = 0; i < path_points.size(); i++) {
-        bool      prev_line_valid = i > 0 && result.valid_lines_bitset[i - 1];
-        glm::vec3 prev_line       = prev_line_valid ? (path_points[i].position - path_points[i - 1].position) : glm::vec3(0);
+      const PathPoint& p = path_points[i];
+        const bool prev_line_valid = i > 0 && result.valid_lines_bitset[i - 1];
+        const glm::vec3 prev_line = prev_line_valid ? (path_points[i].position - path_points[i - 1].position) : glm::vec3(0);
 
-        bool      this_line_valid = i + 1 < path_points.size() && path_points[i + 1].position != path_points[i].position;
-        
-        glm::vec3 this_line       = this_line_valid ? (path_points[i + 1].position - path_points[i].position) : glm::vec3(0);
+        const bool this_line_valid = i + 1 < path_points.size() &&
+            path_points[i + 1].position != path_points[i].position &&
+            path_points[i + 1].type_from_flags() == path_points[i].type_from_flags() &&
+            path_points[i].type_from_flags() != globals::EMoveType::Seam;
+        const glm::vec3 this_line = this_line_valid ? (path_points[i + 1].position - path_points[i].position) : glm::vec3(0);
 
         if (this_line_valid) {
             // there is a valid path between point i and i+1.
@@ -353,17 +385,15 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
             result.valid_lines_bitset.reset(i);
         }
 
-        const PathPoint &p = path_points[i];
-        positions.push_back({p.position});
-        const float height = p.is_travel_move() ? 0.1f : p.height;
-        const float width  = p.is_travel_move() ? 0.1f : p.width;
-
+        positions.push_back({ p.position.x, p.position.y, p.position.z});
         const float angle = atan2(prev_line.x * this_line.y - prev_line.y * this_line.x, glm::dot(prev_line, this_line));
-
-        height_width_angle.push_back({height, width, angle}); 
+        height_width_angle.push_back({ p.height, p.width, angle });
     }
 
     result.total_points_count = path_points.size();
+
+    globals::statistics.positions_size = positions.size() * sizeof(glm::vec3);
+    globals::statistics.height_width_angle_size = height_width_angle.size() * sizeof(glm::vec3);
 
     ///GCODE DATA
     glBindVertexArray(gcodeVAO);
@@ -390,7 +420,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindBuffer(GL_TEXTURE_BUFFER, result.height_width_angle_buffer);
 
     // buffer data to the buffer
-    glBufferData(GL_TEXTURE_BUFFER, height_width_angle.size() * sizeof(glm::vec3), height_width_angle.data(), GL_DYNAMIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, height_width_angle.size() * sizeof(glm::vec3), height_width_angle.data(), GL_STATIC_DRAW);
 
     // Create and bind the texture
     glGenTextures(1, &result.height_width_angle_texture);
@@ -419,7 +449,7 @@ BufferedPath bufferExtrusionPaths(const std::vector<PathPoint>& path_points) {
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
     glBindTexture(GL_TEXTURE_BUFFER, 0);
 
-     //ENABLED LINES BUFFER
+    // ENABLED LINES BUFFER
     // Create a buffer object and bind it to the texture buffer
     glGenBuffers(1, &result.enabled_lines_buffer);
     glBindBuffer(GL_TEXTURE_BUFFER, result.enabled_lines_buffer);
@@ -474,11 +504,13 @@ void init()
 
     checkGl();
 
-    glBufferData(GL_ARRAY_BUFFER, vertex_data_size * sizeof(int), vertex_data, GL_STATIC_DRAW);
+    globals::statistics.vertex_data_size = vertex_data.size() * sizeof(uint8_t);
+
+    glBufferData(GL_ARRAY_BUFFER, vertex_data.size() * sizeof(uint8_t), vertex_data.data(), GL_STATIC_DRAW);
 
     // vertex attributes - id:
     glEnableVertexAttribArray(vid_loc);
-    glVertexAttribIPointer(vid_loc, 1, GL_INT, sizeof(int), (void *)0);
+    glVertexAttribIPointer(vid_loc, 1, GL_UNSIGNED_BYTE, sizeof(uint8_t), (void*)0);
     checkGl();
     glBindVertexArray(0);
 }
