@@ -55,15 +55,15 @@ void main() {
     }else {
         line_dir = line / line_len;
     }
-    vec3 right_dir;
+    vec3 line_right_dir;
     if (abs(dot(line_dir, UP)) > 0.9) {
         // For vertical lines, the width and height should be same, there is no concept of up and down.
         // For simplicity, the code will expand width in the x axis, and height in the y axis 
-        right_dir = normalize(cross(vec3(1,0,0), line_dir));
+        line_right_dir = normalize(cross(vec3(1,0,0), line_dir));
     } else {
-        right_dir = normalize(cross(line_dir, UP));
+        line_right_dir = normalize(cross(line_dir, UP));
     }
-    vec3 up_dir = normalize(cross(right_dir, line_dir));
+    vec3 line_up_dir = normalize(cross(line_right_dir, line_dir));
 
     const vec2 horizontal_vertical_view_signs_array[16] = vec2[](
         //horizontal view (from right)
@@ -97,24 +97,35 @@ void main() {
     vec3 pos_close = (squared_dist_a - squared_dist_b) > 0 ? pos_b : pos_a;
     vec3 camera_view_dir = normalize(pos_close - camera_position);
 
-    vec3 diagonal_dir_border = normalize(height_width_angle.x * up_dir + height_width_angle.y * right_dir);
-    bool is_vertical_view = abs(dot(camera_view_dir, up_dir)) / abs(dot(diagonal_dir_border, up_dir)) >
-        abs(dot(camera_view_dir, right_dir)) / abs(dot(diagonal_dir_border, right_dir));
+    vec3 diagonal_dir_border = normalize(height_width_angle.x * line_up_dir + height_width_angle.y * line_right_dir);
+    bool is_vertical_view = abs(dot(camera_view_dir, line_up_dir)) / abs(dot(diagonal_dir_border, line_up_dir)) >
+        abs(dot(camera_view_dir, line_right_dir)) / abs(dot(diagonal_dir_border, line_right_dir));
 
     vec2 signs = horizontal_vertical_view_signs_array[vertex_id + 8*int(is_vertical_view)];
+    float view_right_sign = sign(dot(-camera_view_dir, line_right_dir));
+    float view_top_sign = sign(dot(-camera_view_dir, line_up_dir));
 
     float half_height = 0.5 * height_width_angle.x;
     float half_width = 0.5 * height_width_angle.y;
 
-    vec3 horizontal_dir = half_width * right_dir;
-    vec3 vertical_dir = half_height * up_dir;
+    vec3 horizontal_dir = half_width * line_right_dir;
+    vec3 vertical_dir = half_height * line_up_dir;
 
-    vec3 pos = endpoint_pos + signs.x * horizontal_dir + signs.y * vertical_dir;
+    float horizontal_sign = signs.x * view_right_sign;
+    float vertical_sign = signs.y * view_top_sign;
+
+    vec3 pos = endpoint_pos + horizontal_sign * horizontal_dir + vertical_sign * vertical_dir;
 
     if (vertex_id == 2 || vertex_id == 7) {
         float line_dir_sign = (vertex_id == 2) ? -1.0 : 1.0;
-        pos += line_dir_sign * line_dir * height_width_angle.y * 0.5 * sin(height_width_angle.z * 0.5);
-        pos += right_dir * height_width_angle.y * 0.5 * cos(height_width_angle.z * 0.5);
+        if (height_width_angle.z == 0) { 
+            // There I add a cap to lines that do not have a following line 
+            // (or they have one, but perfectly aligned, so the cap is hidden inside the next line).
+            pos += line_dir_sign * line_dir * half_width;
+        } else {
+            pos += line_dir_sign * line_dir * half_width * sin(abs(height_width_angle.z) * 0.5);
+            pos += sign(height_width_angle.z) * horizontal_dir * cos(abs(height_width_angle.z) * 0.5);
+        }
     }
 
     // LIGHTING begin
