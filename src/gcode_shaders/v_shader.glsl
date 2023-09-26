@@ -1,5 +1,7 @@
 #version 150
 
+#define POINTY_CAPS
+
 uniform mat4 view_projection;
 uniform vec3 camera_position;
 uniform int instance_base;
@@ -102,6 +104,11 @@ void main() {
         abs(dot(camera_view_dir, line_right_dir)) / abs(dot(diagonal_dir_border, line_right_dir));
 
     vec2 signs = horizontal_vertical_view_signs_array[vertex_id + 8*int(is_vertical_view)];
+
+#ifndef POINTY_CAPS
+    if (vertex_id == 2 || vertex_id == 7) signs = -horizontal_vertical_view_signs_array[(vertex_id - 2) + 8*int(is_vertical_view)];
+#endif
+
     float view_right_sign = sign(dot(-camera_view_dir, line_right_dir));
     float view_top_sign = sign(dot(-camera_view_dir, line_up_dir));
 
@@ -119,9 +126,11 @@ void main() {
     if (vertex_id == 2 || vertex_id == 7) {
         float line_dir_sign = (vertex_id == 2) ? -1.0 : 1.0;
         if (height_width_angle.z == 0) { 
+#ifdef POINTY_CAPS
             // There I add a cap to lines that do not have a following line 
             // (or they have one, but perfectly aligned, so the cap is hidden inside the next line).
             pos += line_dir_sign * line_dir * half_width;
+#endif
         } else {
             pos += line_dir_sign * line_dir * half_width * sin(abs(height_width_angle.z) * 0.5);
             pos += sign(height_width_angle.z) * horizontal_dir * cos(abs(height_width_angle.z) * 0.5);
