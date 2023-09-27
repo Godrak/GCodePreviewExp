@@ -1,6 +1,7 @@
 #version 150
 
 #define POINTY_CAPS
+//#define FIX_TWISTING
 
 uniform mat4 view_projection;
 uniform vec3 camera_position;
@@ -46,8 +47,6 @@ void main() {
     vec3 pos_b = texelFetch(positionsTex, id_b).xyz;
 
 	vec3 line = pos_b - pos_a;
-    vec3 view_a = pos_a - camera_position;
-    vec3 view_b = pos_b - camera_position;
 
     // directions of the line box in world space
     float line_len = length(line);
@@ -92,17 +91,19 @@ void main() {
     vec3 endpoint_pos = vertex_id < 4 ? pos_a : pos_b;
     vec3 height_width_angle = texelFetch(heightWidthAngleTex, id).xyz;
 
-    
-    float squared_dist_a = dot(view_a, view_a);
-    float squared_dist_b = dot(view_b, view_b);
-
-    vec3 pos_close = (squared_dist_a - squared_dist_b) > 0 ? pos_b : pos_a;
-    vec3 camera_view_dir = normalize(pos_close - camera_position);
-
+#ifdef FIX_TWISTING
+    int closer_id = (dot(camera_position - pos_a, camera_position - pos_a) < dot(camera_position - pos_b, camera_position - pos_b)) ? id_a : id_b;
+    vec3 closer_pos = (closer_id == id_a) ? pos_a : pos_b;
+    vec3 camera_view_dir = normalize(closer_pos - camera_position);
+    vec3 closer_height_width_angle = texelFetch(heightWidthAngleTex, closer_id).xyz;
+    vec3 diagonal_dir_border = normalize(closer_height_width_angle.x * line_up_dir + closer_height_width_angle.y * line_right_dir);
+#else
+    vec3 camera_view_dir = normalize(endpoint_pos - camera_position);
     vec3 diagonal_dir_border = normalize(height_width_angle.x * line_up_dir + height_width_angle.y * line_right_dir);
+#endif
+
     bool is_vertical_view = abs(dot(camera_view_dir, line_up_dir)) / abs(dot(diagonal_dir_border, line_up_dir)) >
         abs(dot(camera_view_dir, line_right_dir)) / abs(dot(diagonal_dir_border, line_right_dir));
-
     vec2 signs = horizontal_vertical_view_signs_array[vertex_id + 8*int(is_vertical_view)];
 
 #ifndef POINTY_CAPS
